@@ -79,9 +79,6 @@ if (datetime.now() - st.session_state.get('last_sync', datetime.now())).seconds 
     st.session_state.last_sync = datetime.now()
     st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
 
-# ------------------------------------------------------------------------------
-# Streamlit UI
-# ------------------------------------------------------------------------------
 st.title("Rotation Scheduler WebService 💻")
 
 st.sidebar.title("팀 선택 ✅")
@@ -92,11 +89,34 @@ today_date = datetime.now(korea_tz)
 current_year = today_date.year
 current_month = today_date.month
 
-st.sidebar.title("월 선택 📅")
+# 날짜와 월 선택 동기화 적용
+if "selected_date" not in st.session_state:
+    st.session_state["selected_date"] = today_date.date()
+
+if "selected_month" not in st.session_state:
+    st.session_state["selected_month"] = f"{today_date.month}월"
+
 months = [f"{i}월" for i in range(1, 13)]
-current_month_index = current_month - 1
-selected_month = st.sidebar.selectbox("", months, index=current_month_index)
-selected_month_num = int(selected_month.replace("월", ""))
+
+def update_date_from_month():
+    new_month_num = int(st.session_state["selected_month"].replace("월", ""))
+    orig_day = st.session_state["selected_date"].day
+    try:
+        st.session_state["selected_date"] = datetime(current_year, new_month_num, orig_day).date()
+    except ValueError:
+        # 만약 설정하려는 날짜가 해당 월에 없으면 1일로 맞춤
+        st.session_state["selected_date"] = datetime(current_year, new_month_num, 1).date()
+
+def update_month_from_date():
+    st.session_state["selected_month"] = f"{st.session_state['selected_date'].month}월"
+
+st.sidebar.title("월 선택 📅")
+st.sidebar.selectbox(
+    "",
+    options=months,
+    key="selected_month",
+    on_change=update_date_from_month
+)
 
 schedules_folder_path = os.path.join(schedules_root_dir, selected_team)
 model_example_folder_path = os.path.join(model_example_root_dir, selected_team)
@@ -108,13 +128,15 @@ create_dir_safe(model_example_folder_path)
 create_dir_safe(today_team_folder_path)
 create_dir_safe(memo_team_folder_path)
 
+selected_month_num = int(st.session_state["selected_month"].replace("월", ""))
+
 start_date = datetime(current_year, selected_month_num, 1)
 end_date = (start_date + timedelta(days=31)).replace(day=1) - timedelta(days=1)
 date_list = [(start_date + timedelta(days=i)) for i in range((end_date - start_date).days + 1)]
 
-schedules_file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+schedules_file_path = os.path.join(schedules_folder_path, f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv")
 model_example_file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
-memo_file_path = os.path.join(memo_team_folder_path, f"{current_year}_{selected_month}_memos.json")
+memo_file_path = os.path.join(memo_team_folder_path, f"{current_year}_{st.session_state['selected_month']}_memos.json")
 
 st.sidebar.title("메모 추가 ✏️")
 
@@ -228,14 +250,11 @@ if password:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
 
-                    file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+                    file_path = os.path.join(schedules_folder_path, f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv")
                     try:
-                        # ------------------------------------------------------------------------------
-                        # 3) 파일 저장 로직 (GitHub 연동)
-                        # ------------------------------------------------------------------------------
                         df.to_csv(file_path, index=False, encoding='utf-8-sig')
                         git_auto_commit(file_path, selected_team)
-                        st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
+                        st.sidebar.success(f"{st.session_state['selected_month']} 근무표 업로드 완료 ⭕")
                     except Exception as save_error:
                         st.sidebar.error(f"파일 처리 중 오류: {save_error}")
                         git_pull_changes()
@@ -244,12 +263,9 @@ if password:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
 
             elif st.session_state.schedules_upload_canceled:
-                file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+                file_path = os.path.join(schedules_folder_path, f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv")
                 if os.path.exists(file_path):
                     try:
-                        # ------------------------------------------------------------------------------
-                        # 4) 관리자 모드 파일 삭제 로직 (GitHub 연동)
-                        # ------------------------------------------------------------------------------
                         os.remove(file_path)
                         git_auto_commit("*.csv", "File Deletion")
                         st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
@@ -322,14 +338,14 @@ st.sidebar.markdown("🙋:blue[문의 : 관제SO팀]")
 
 try:
     df = pd.read_csv(schedules_file_path)
-    if selected_month_num == current_month:
+    if st.session_state["selected_date"].month == current_month:
         default_date = today_date
     else:
         default_date = datetime(current_year, selected_month_num, 1)
 
     col1, col2 = st.columns([1.5, 1])
     with col1:
-        st.header(f"{selected_team} {selected_month} 근무표")
+        st.header(f"{selected_team} {st.session_state['selected_month']} 근무표")
     with col2:
         buffer = BytesIO()
         df.to_csv(buffer, index=False, encoding="utf-8-sig")
@@ -338,7 +354,7 @@ try:
         st.download_button(
             label="📊 엑셀 다운로드",
             data=buffer,
-            file_name=f"{selected_team}_{selected_month}_근무표.csv",
+            file_name=f"{selected_team}_{st.session_state['selected_month']}_근무표.csv",
             mime="text/csv"
         )
 
@@ -348,13 +364,14 @@ try:
         df_model = df_model.dropna(subset=["실제 근무", "팀 근무기호"])
         work_mapping = dict(zip(df_model["팀 근무기호"], df_model["실제 근무"]))
 
-        if selected_month_num == current_month:
-            default_date = today_date.date()
-        else:
-            default_date = datetime(current_year, selected_month_num, 1).date()
-
+        # 날짜 선택
         st.subheader("날짜 선택 📅")
-        selected_date = st.date_input("날짜를 선택하세요:", default_date)
+        selected_date = st.date_input(
+            "날짜를 선택하세요:",
+            value=st.session_state["selected_date"],
+            key="selected_date",
+            on_change=update_month_from_date
+        )
         today_column = f"{selected_date.day}({['월','화','수','목','금','토','일'][selected_date.weekday()]})"
         df_schedule.columns = df_schedule.columns.str.strip()
 
@@ -557,15 +574,15 @@ try:
     if employee_name:
         filtered_df = df[df["이름"].str.contains(employee_name, na=False)]
         if not filtered_df.empty:
-            st.write(f"**{employee_name}** 님의 근무표")
+            st.write(f"{employee_name} 님의 근무표")
             st.dataframe(filtered_df, hide_index=True)
         else:
             st.warning(f"'{employee_name}' 님의 데이터가 없습니다.")
 
 except FileNotFoundError:
-    st.info(f"❌ {selected_month} 근무표가 등록되지 않았습니다.")
+    st.info(f"❌ {st.session_state['selected_month']} 근무표가 등록되지 않았습니다.")
 
-st.header(f"{selected_team} - {selected_month} 메모 📓")
+st.header(f"{selected_team} - {st.session_state['selected_month']} 메모 📓")
 
 def load_memos(memo_file_path):
     if os.path.exists(memo_file_path):
@@ -599,11 +616,11 @@ if memos_list:
         st.write("🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺")
 
         if st.button(
-            f"🙋 삭제는 관리자에게 문의 부탁드립니다!🗑️ ◽작성자 : **{memo['author']}** ◽작성시간 : ({formatted_timestamp})",
+            f"🙋 삭제는 관리자에게 문의 부탁드립니다!🗑️ ◽작성자 : {memo['author']} ◽작성시간 : ({formatted_timestamp})",
             key=f"delete_{formatted_timestamp}_{idx}",
             disabled=not st.session_state.admin_authenticated
         ):
             delete_memo_and_refresh(memo['timestamp'])
         st.markdown("---")
 else:
-    st.info(f"{selected_team}의 {selected_month}에 저장된 메모가 없습니다.")
+    st.info(f"{selected_team}의 {st.session_state['selected_month']}에 저장된 메모가 없습니다.")
