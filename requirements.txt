@@ -1,0 +1,7 @@
+streamlit
+pandas
+openpyxl
+charset-normalizer
+streamlit-aggrid
+cryptography
+gitpython
