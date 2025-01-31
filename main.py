@@ -99,15 +99,17 @@ if "selected_month" not in st.session_state:
     st.session_state["selected_month"] = f"{today_date.month}월"
 
 def update_date_from_month():
+    new_month_num = int(st.session_state["selected_month"].replace("월", ""))
+    
+    # selected_date가 없을 때만, 현재 st.session_state["selected_month"] 기준으로 기본값 세팅
     if "selected_date" not in st.session_state:
         st.session_state["selected_date"] = datetime(current_year, new_month_num, 1).date()
-    
-    new_month_num = int(st.session_state["selected_month"].replace("월", ""))
-    orig_day = st.session_state["selected_date"].day
-    
+
     try:
+        orig_day = st.session_state["selected_date"].day
         st.session_state["selected_date"] = datetime(current_year, new_month_num, orig_day).date()
     except ValueError:
+        # orig_day가 해당 월에 없으면 1일로 맞춤
         st.session_state["selected_date"] = datetime(current_year, new_month_num, 1).date()
 
 def update_month_from_date():
