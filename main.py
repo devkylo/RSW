@@ -27,7 +27,7 @@ def git_auto_commit(file_path, team_name):
     """변경사항 자동 커밋"""
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     os.system(f'cd {schedules_root_dir} && git add {file_path}')
-    os.system(f'cd {schedules_root_dir} && git commit -m "{commit_message}"')
+    os.system(f'cd {schedules_root_dir} && git commit -m \"{commit_message}\"')
     os.system(f'cd {schedules_root_dir} && git push origin main')
 
 def git_pull_changes():
@@ -53,7 +53,7 @@ def encrypt_data(data):
 # ------------------------------------------------------------------------------
 schedules_root_dir = "team_schedules"
 model_example_root_dir = "team_model_example"
-today_schedules_root_dir = "team_today_schedules" # 매일 근무자 dir 생성
+today_schedules_root_dir = "team_today_schedules"  # 매일 근무자 dir 생성
 memo_root_dir = "team_memo"
 
 # GitHub 저장소 초기화 (최상단에서 1회 실행)
@@ -64,6 +64,15 @@ def create_dir_safe(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
         st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
+        # .gitkeep 파일 생성
+        gitkeep_path = os.path.join(path, ".gitkeep")
+        with open(gitkeep_path, "w") as f:
+            f.write("")
+        # 생성된 디렉토리를 GitHub에 반영
+        os.system(f'cd {schedules_root_dir} && git add "{path}"')
+        commit_message = f"Add directory: {path}"
+        os.system(f'cd {schedules_root_dir} && git commit -m "{commit_message}"')
+        os.system(f'cd {schedules_root_dir} && git push origin main')
 
 for d in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
     create_dir_safe(d)
@@ -318,7 +327,7 @@ if password:
     else:
         st.sidebar.error("❌ 비밀번호 오류 ❌")
 
-st.sidebar.markdown("🙋:blue[문의 : 관제SO팀]")
+st.sidebar.markdown("🙋 :blue[문의 : 관제SO팀]")
 
 try:
     df = pd.read_csv(schedules_file_path)
