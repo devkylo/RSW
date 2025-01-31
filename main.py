@@ -89,8 +89,8 @@ teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안S
 selected_team = st.sidebar.radio("", teams)
 
 today_date = datetime.now(korea_tz)
-current_year = datetime.now().year
-current_month = datetime.now().month
+current_year = today_date.year
+current_month = today_date.month
 
 st.sidebar.title("월 선택 📅")
 months = [f"{i}월" for i in range(1, 13)]
