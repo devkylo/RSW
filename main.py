@@ -60,22 +60,26 @@ memo_root_dir = "team_memo"
 git_init_repo()
 git_pull_changes()
 
-def create_dir_safe(path):
+def create_dir_safe(path, commit_team_name="DefaultTeam"):
+    """디렉토리 생성 및 GitHub에 반영"""
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
         st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
-        # .gitkeep 파일 생성
+
+        # .gitkeep 파일 추가
         gitkeep_path = os.path.join(path, ".gitkeep")
         with open(gitkeep_path, "w") as f:
-            f.write("")
-        # 생성된 디렉토리를 GitHub에 반영
-        os.system(f'cd {schedules_root_dir} && git add "{path}"')
-        commit_message = f"Add directory: {path}"
-        os.system(f'cd {schedules_root_dir} && git commit -m "{commit_message}"')
-        os.system(f'cd {schedules_root_dir} && git push origin main')
+            f.write("")  # 빈 파일
 
+        # Git 명령어로 변경 사항 반영
+        os.system(f'git add "{path}"')
+        commit_message = f"Add directory: {path} for {commit_team_name}"
+        os.system(f'git commit -m "{commit_message}"')
+        os.system('git push origin main')
+
+# 필요한 디렉토리 생성
 for d in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
-    create_dir_safe(d)
+    create_dir_safe(d, "InitialSetup")
 
 # 앱 시작 시 최초 동기화
 if 'git_synced' not in st.session_state:
@@ -98,8 +102,8 @@ teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안S
 selected_team = st.sidebar.radio("", teams)
 
 today_date = datetime.now(korea_tz)
-current_year = datetime.now().year
-current_month = datetime.now().month
+current_year = today_date.year
+current_month = today_date.month
 
 st.sidebar.title("월 선택 📅")
 months = [f"{i}월" for i in range(1, 13)]
@@ -112,10 +116,11 @@ model_example_folder_path = os.path.join(model_example_root_dir, selected_team)
 today_team_folder_path = os.path.join(today_schedules_root_dir, selected_team)
 memo_team_folder_path = os.path.join(memo_root_dir, selected_team)
 
-create_dir_safe(schedules_folder_path)
-create_dir_safe(model_example_folder_path)
-create_dir_safe(today_team_folder_path)
-create_dir_safe(memo_team_folder_path)
+# 팀별 디렉토리 생성
+create_dir_safe(schedules_folder_path, selected_team)
+create_dir_safe(model_example_folder_path, selected_team)
+create_dir_safe(today_team_folder_path, selected_team)
+create_dir_safe(memo_team_folder_path, selected_team)
 
 start_date = datetime(current_year, selected_month_num, 1)
 end_date = (start_date + timedelta(days=31)).replace(day=1) - timedelta(days=1)
@@ -237,7 +242,10 @@ if password:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
 
-                    file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+                    file_path = os.path.join(
+                        schedules_folder_path,
+                        f"{current_year}_{selected_month}_{selected_team}_schedule.csv"
+                    )
                     try:
                         # ------------------------------------------------------------------------------
                         # 3) 파일 저장 로직 (GitHub 연동)
@@ -253,7 +261,10 @@ if password:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
 
             elif st.session_state.schedules_upload_canceled:
-                file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+                file_path = os.path.join(
+                    schedules_folder_path,
+                    f"{current_year}_{selected_month}_{selected_team}_schedule.csv"
+                )
                 if os.path.exists(file_path):
                     try:
                         # ------------------------------------------------------------------------------
@@ -300,7 +311,10 @@ if password:
                                 uploaded_model_example_file.seek(0)
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
 
-                    file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
+                    file_path = os.path.join(
+                        model_example_folder_path,
+                        f"{selected_team}_model_example.csv"
+                    )
                     try:
                         df.to_csv(file_path, index=False, encoding='utf-8-sig')
                         git_auto_commit(file_path, selected_team)
@@ -313,7 +327,10 @@ if password:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
 
             elif st.session_state.model_example_upload_canceled:
-                file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
+                file_path = os.path.join(
+                    model_example_folder_path,
+                    f"{selected_team}_model_example.csv"
+                )
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
@@ -393,9 +410,14 @@ try:
                         part_display_day["파트"] = part_display_day["파트"].replace("총괄", "팀장")
                         part_display_day.index = ['🌇'] * len(part_display_day)
                         styled_table_day = part_display_day.style.set_table_styles([
-                            {'selector': 'td', 'props': [('text-align', 'center'), ('width', '100px'),
-                                                         ('min-width', '100px'), ('max-width', '100px'),
-                                                         ('box-sizing', 'border-box')]}
+                            {'selector': 'td',
+                             'props': [
+                                 ('text-align', 'center'),
+                                 ('width', '100px'),
+                                 ('min-width', '100px'),
+                                 ('max-width', '100px'),
+                                 ('box-sizing', 'border-box')
+                             ]}
                         ])
                         st.table(styled_table_day)
                 else:
@@ -411,16 +433,21 @@ try:
                         part_display_night["파트"] = part_display_night["파트"].replace("총괄", "팀장")
                         part_display_night.index = ['🌃'] * len(part_display_night)
                         styled_table_night = part_display_night.style.set_table_styles([
-                            {'selector': 'td', 'props': [('text-align', 'center'), ('width', '100px'),
-                                                         ('min-width', '100px'), ('max-width', '100px'),
-                                                         ('box-sizing', 'border-box')]}
+                            {'selector': 'td',
+                             'props': [
+                                 ('text-align', 'center'),
+                                 ('width', '100px'),
+                                 ('min-width', '100px'),
+                                 ('max-width', '100px'),
+                                 ('box-sizing', 'border-box')
+                             ]}
                         ])
                         st.table(styled_table_night)
                 else:
                     st.write("야간 근무자가 없습니다.")
 
                 st.write("휴가 근무자 🌴")
-                vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차","숙/연차"]
+                vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
                 vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
                 if not vacation_shift.empty:
                     vacation_display = vacation_shift[["파트 구분", "이름", today_column]].rename(
@@ -428,9 +455,14 @@ try:
                     vacation_display["파트"] = vacation_display["파트"].replace("총괄", "팀장")
                     vacation_display.index = ['🌄'] * len(vacation_display)
                     styled_table_vacation = vacation_display.style.set_table_styles([
-                        {'selector': 'td', 'props': [('text-align', 'center'), ('width', '100px'),
-                                                     ('min-width', '100px'), ('max-width', '100px'),
-                                                     ('box-sizing', 'border-box')]}
+                        {'selector': 'td',
+                         'props': [
+                             ('text-align', 'center'),
+                             ('width', '100px'),
+                             ('min-width', '100px'),
+                             ('max-width', '100px'),
+                             ('box-sizing', 'border-box')
+                         ]}
                     ])
                     st.table(styled_table_vacation)
                 else:
@@ -443,7 +475,9 @@ try:
                 month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
                 if not os.path.exists(month_folder):
                     os.mkdir(month_folder)
-                json_file_path = os.path.join(month_folder, f"{date.strftime('%Y-%m-%d')}_schedule.json")
+                json_file_path = os.path.join(
+                    month_folder, f"{date.strftime('%Y-%m-%d')}_schedule.json"
+                )
                 today_column = f"{date.day}({['월','화','수','목','금','토','일'][date.weekday()]})"
                 if today_column in df_schedule.columns:
                     df_schedule["근무 형태"] = df_schedule[today_column].map(work_mapping).fillna("")
