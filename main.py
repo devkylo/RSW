@@ -318,7 +318,7 @@ if password:
     else:
         st.sidebar.error("❌ 비밀번호 오류 ❌")
 
-st.sidebar.markdown("🙋 ♂️ :blue[문의 : 관제SO팀]")
+st.sidebar.markdown("🙋:blue[문의 : 관제SO팀]")
 
 try:
     df = pd.read_csv(schedules_file_path)
