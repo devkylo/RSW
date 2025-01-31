@@ -12,16 +12,6 @@ from urllib.parse import unquote
 from cryptography.fernet import Fernet
 
 korea_tz = pytz.timezone("Asia/Seoul")
-today_date = datetime.now(korea_tz)
-current_year = today_date.year
-current_month = today_date.month
-
-# 날짜와 월 선택 동기화 적용
-if "selected_date" not in st.session_state:
-    st.session_state["selected_date"] = today_date.date()
-
-if "selected_month" not in st.session_state:
-    st.session_state["selected_month"] = f"{today_date.month}월"
 
 # ------------------------------------------------------------------------------
 # 1) GitHub 초기화 모듈
@@ -96,6 +86,17 @@ teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안S
 selected_team = st.sidebar.radio("", teams)
 
 months = [f"{i}월" for i in range(1, 13)]
+
+today_date = datetime.now(korea_tz)
+current_year = today_date.year
+current_month = today_date.month
+
+# 날짜와 월 선택 동기화 적용
+if "selected_date" not in st.session_state:
+    st.session_state["selected_date"] = today_date.date()
+
+if "selected_month" not in st.session_state:
+    st.session_state["selected_month"] = f"{today_date.month}월"
 
 def update_date_from_month():
     new_month_num = int(st.session_state["selected_month"].replace("월", ""))
