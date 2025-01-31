@@ -599,7 +599,7 @@ if memos_list:
         st.write("🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺")
 
         if st.button(
-            f"🙋 ♂️삭제는 관리자에게 문의 부탁드립니다!🗑️ ◽작성자 : **{memo['author']}** ◽작성시간 : ({formatted_timestamp})",
+            f"🙋 삭제는 관리자에게 문의 부탁드립니다!🗑️ ◽작성자 : **{memo['author']}** ◽작성시간 : ({formatted_timestamp})",
             key=f"delete_{formatted_timestamp}_{idx}",
             disabled=not st.session_state.admin_authenticated
         ):
