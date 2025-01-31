@@ -2,7 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, date
 import time
 import pytz
 import json
@@ -91,7 +91,7 @@ current_month = today_date.month
 
 # 날짜와 월 선택 동기화 적용
 if "selected_date" not in st.session_state:
-    st.session_state["selected_date"] = today_date.date()
+    st.session_state["selected_date"] = date.today()
 
 if "selected_month" not in st.session_state:
     st.session_state["selected_month"] = f"{today_date.month}월"
@@ -250,7 +250,10 @@ if password:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
 
-                    file_path = os.path.join(schedules_folder_path, f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv")
+                    file_path = os.path.join(
+                        schedules_folder_path,
+                        f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv"
+                    )
                     try:
                         df.to_csv(file_path, index=False, encoding='utf-8-sig')
                         git_auto_commit(file_path, selected_team)
@@ -263,7 +266,10 @@ if password:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
 
             elif st.session_state.schedules_upload_canceled:
-                file_path = os.path.join(schedules_folder_path, f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv")
+                file_path = os.path.join(
+                    schedules_folder_path,
+                    f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv"
+                )
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
@@ -307,7 +313,10 @@ if password:
                                 uploaded_model_example_file.seek(0)
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
 
-                    file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
+                    file_path = os.path.join(
+                        model_example_folder_path,
+                        f"{selected_team}_model_example.csv"
+                    )
                     try:
                         df.to_csv(file_path, index=False, encoding='utf-8-sig')
                         git_auto_commit(file_path, selected_team)
@@ -320,7 +329,10 @@ if password:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
 
             elif st.session_state.model_example_upload_canceled:
-                file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
+                file_path = os.path.join(
+                    model_example_folder_path,
+                    f"{selected_team}_model_example.csv"
+                )
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
@@ -338,10 +350,8 @@ st.sidebar.markdown("🙋:blue[문의 : 관제SO팀]")
 
 try:
     df = pd.read_csv(schedules_file_path)
-    if st.session_state["selected_date"].month == current_month:
-        default_date = today_date
-    else:
-        default_date = datetime(current_year, selected_month_num, 1)
+
+    # 기존 default_date 사용 로직 제거
 
     col1, col2 = st.columns([1.5, 1])
     with col1:
@@ -364,11 +374,9 @@ try:
         df_model = df_model.dropna(subset=["실제 근무", "팀 근무기호"])
         work_mapping = dict(zip(df_model["팀 근무기호"], df_model["실제 근무"]))
 
-        # 날짜 선택
         st.subheader("날짜 선택 📅")
         selected_date = st.date_input(
             "날짜를 선택하세요:",
-            value=st.session_state["selected_date"],
             key="selected_date",
             on_change=update_month_from_date
         )
@@ -401,9 +409,11 @@ try:
                         part_display_day["파트"] = part_display_day["파트"].replace("총괄", "팀장")
                         part_display_day.index = ['🌇'] * len(part_display_day)
                         styled_table_day = part_display_day.style.set_table_styles([
-                            {'selector': 'td', 'props': [('text-align', 'center'), ('width', '100px'),
-                                                         ('min-width', '100px'), ('max-width', '100px'),
-                                                         ('box-sizing', 'border-box')]}
+                            {'selector': 'td', 'props': [
+                                ('text-align', 'center'), ('width', '100px'),
+                                ('min-width', '100px'), ('max-width', '100px'),
+                                ('box-sizing', 'border-box')
+                            ]}
                         ])
                         st.table(styled_table_day)
                 else:
@@ -419,9 +429,11 @@ try:
                         part_display_night["파트"] = part_display_night["파트"].replace("총괄", "팀장")
                         part_display_night.index = ['🌃'] * len(part_display_night)
                         styled_table_night = part_display_night.style.set_table_styles([
-                            {'selector': 'td', 'props': [('text-align', 'center'), ('width', '100px'),
-                                                         ('min-width', '100px'), ('max-width', '100px'),
-                                                         ('box-sizing', 'border-box')]}
+                            {'selector': 'td', 'props': [
+                                ('text-align', 'center'), ('width', '100px'),
+                                ('min-width', '100px'), ('max-width', '100px'),
+                                ('box-sizing', 'border-box')
+                            ]}
                         ])
                         st.table(styled_table_night)
                 else:
@@ -436,9 +448,11 @@ try:
                     vacation_display["파트"] = vacation_display["파트"].replace("총괄", "팀장")
                     vacation_display.index = ['🌄'] * len(vacation_display)
                     styled_table_vacation = vacation_display.style.set_table_styles([
-                        {'selector': 'td', 'props': [('text-align', 'center'), ('width', '100px'),
-                                                     ('min-width', '100px'), ('max-width', '100px'),
-                                                     ('box-sizing', 'border-box')]}
+                        {'selector': 'td', 'props': [
+                            ('text-align', 'center'), ('width', '100px'),
+                            ('min-width', '100px'), ('max-width', '100px'),
+                            ('box-sizing', 'border-box')
+                        ]}
                     ])
                     st.table(styled_table_vacation)
                 else:
@@ -447,36 +461,46 @@ try:
             st.warning(f"선택한 날짜 ({today_column})에 해당하는 데이터가 없습니다.")
 
         def save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping):
-            for date in date_list:
-                month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
+            for date_obj in date_list:
+                month_folder = os.path.join(today_team_folder_path, date_obj.strftime('%Y-%m'))
                 if not os.path.exists(month_folder):
                     os.mkdir(month_folder)
-                json_file_path = os.path.join(month_folder, f"{date.strftime('%Y-%m-%d')}_schedule.json")
-                today_column = f"{date.day}({['월','화','수','목','금','토','일'][date.weekday()]})"
-                if today_column in df_schedule.columns:
-                    df_schedule["근무 형태"] = df_schedule[today_column].map(work_mapping).fillna("")
+                json_file_path = os.path.join(
+                    month_folder, f"{date_obj.strftime('%Y-%m-%d')}_schedule.json"
+                )
+                day_label = ['월','화','수','목','금','토','일'][date_obj.weekday()]
+                today_column_inner = f"{date_obj.day}({day_label})"
+                if today_column_inner in df_schedule.columns:
+                    df_schedule["근무 형태"] = (
+                        df_schedule[today_column_inner].map(work_mapping).fillna("")
+                    )
                     day_shift = df_schedule[df_schedule["근무 형태"].str.contains("주", na=False)].copy()
-                    day_shift_data = day_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
+                    day_shift_data = day_shift[["파트 구분", "이름", today_column_inner]].rename(
+                        columns={"파트 구분": "파트", today_column_inner: "근무"}
+                    ).to_dict(orient="records")
 
                     night_shift = df_schedule[df_schedule["근무 형태"].str.contains("야", na=False)].copy()
-                    night_shift_data = night_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
+                    night_shift_data = night_shift[["파트 구분", "이름", today_column_inner]].rename(
+                        columns={"파트 구분": "파트", today_column_inner: "근무"}
+                    ).to_dict(orient="records")
 
                     vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
-                    vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
-                    vacation_shift_data = vacation_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
+                    vacation_shift = df_schedule[
+                        df_schedule[today_column_inner].isin(vacation_keywords)
+                    ].copy()
+                    vacation_shift_data = vacation_shift[["파트 구분", "이름", today_column_inner]].rename(
+                        columns={"파트 구분": "파트", today_column_inner: "근무"}
+                    ).to_dict(orient="records")
 
                     schedule_data = {
-                        "date": date.strftime('%Y-%m-%d'),
+                        "date": date_obj.strftime('%Y-%m-%d'),
                         "day_shift": day_shift_data,
                         "night_shift": night_shift_data,
                         "vacation_shift": vacation_shift_data
                     }
                 else:
                     schedule_data = {
-                        "date": date.strftime('%Y-%m-%d'),
+                        "date": date_obj.strftime('%Y-%m-%d'),
                         "day_shift": [],
                         "night_shift": [],
                         "vacation_shift": []
@@ -486,12 +510,12 @@ try:
 
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
 
-        def get_json_file_path(date, team):
-            today_schedules_root_dir = "team_today_schedules"
-            today_team_folder_path = os.path.join(today_schedules_root_dir, team)
-            month_folder = os.path.join(today_team_folder_path, date[:7])
-            json_file_path = os.path.join(month_folder, f"{date}_schedule.json")
-            return json_file_path
+        def get_json_file_path(date_str, team):
+            today_schedules_root_dir_inner = "team_today_schedules"
+            today_team_folder_path_inner = os.path.join(today_schedules_root_dir_inner, team)
+            month_folder_inner = os.path.join(today_team_folder_path_inner, date_str[:7])
+            json_file_path_inner = os.path.join(month_folder_inner, f"{date_str}_schedule.json")
+            return json_file_path_inner
 
         def load_json_data(file_path):
             if os.path.exists(file_path):
@@ -531,12 +555,10 @@ try:
                 })
                 return
 
-            json_file_path = get_json_file_path(selected_date_api, selected_team_api)
-            schedule_data = load_json_data(json_file_path)
+            json_file_path_inner = get_json_file_path(selected_date_api, selected_team_api)
+            schedule_data = load_json_data(json_file_path_inner)
             if schedule_data:
-                st.write({
-                    "data": schedule_data
-                })
+                st.write({"data": schedule_data})
             else:
                 st.write({
                     "status": "error",
@@ -558,7 +580,11 @@ try:
     gb.configure_column("파트 구분", pinned="left")
     gb.configure_column("이름", pinned="left")
     gb.configure_default_column(width=10)
-    gb.configure_grid_options(domLayout='normal', alwaysShowHorizontalScroll=True, suppressColumnVirtualisation=True)
+    gb.configure_grid_options(
+        domLayout='normal',
+        alwaysShowHorizontalScroll=True,
+        suppressColumnVirtualisation=True
+    )
     grid_options = gb.build()
 
     st.subheader("전체 근무표 📆")
@@ -572,10 +598,10 @@ try:
     st.subheader("🔍 구성원 근무표 검색")
     employee_name = st.text_input(f"{selected_team} 구성원 이름 입력")
     if employee_name:
-        filtered_df = df[df["이름"].str.contains(employee_name, na=False)]
-        if not filtered_df.empty:
+        filtered_by_name = df[df["이름"].str.contains(employee_name, na=False)]
+        if not filtered_by_name.empty:
             st.write(f"{employee_name} 님의 근무표")
-            st.dataframe(filtered_df, hide_index=True)
+            st.dataframe(filtered_by_name, hide_index=True)
         else:
             st.warning(f"'{employee_name}' 님의 데이터가 없습니다.")
 
