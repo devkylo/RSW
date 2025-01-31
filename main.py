@@ -12,6 +12,9 @@ from urllib.parse import unquote
 from cryptography.fernet import Fernet
 
 korea_tz = pytz.timezone("Asia/Seoul")
+today_date = datetime.now(korea_tz)
+current_year = today_date.year
+current_month = today_date.month
 
 # ------------------------------------------------------------------------------
 # 1) GitHub 초기화 모듈
@@ -87,11 +90,8 @@ selected_team = st.sidebar.radio("", teams)
 
 months = [f"{i}월" for i in range(1, 13)]
 
-today_date = datetime.now(korea_tz)
-current_year = today_date.year
-current_month = today_date.month
-
 # 날짜와 월 선택 동기화 적용
+# 초기화: 세션 상태에 기본값 설정
 if "selected_date" not in st.session_state:
     st.session_state["selected_date"] = today_date.date()
 
@@ -102,15 +102,15 @@ def update_date_from_month():
     new_month_num = int(st.session_state["selected_month"].replace("월", ""))
     
     # selected_date가 없을 때만, 현재 st.session_state["selected_month"] 기준으로 기본값 세팅
-    if "selected_date" not in st.session_state:
-        st.session_state["selected_date"] = datetime(current_year, new_month_num, 1).date()
+    #if "selected_date" not in st.session_state:
+        #st.session_state["selected_date"] = datetime(current_year, new_month_num, 1).date()
 
-    try:
-        orig_day = st.session_state["selected_date"].day
-        st.session_state["selected_date"] = datetime(current_year, new_month_num, orig_day).date()
-    except ValueError:
+    #try:
+        #orig_day = st.session_state["selected_date"].day
+        #st.session_state["selected_date"] = datetime(current_year, new_month_num, orig_day).date()
+    #except ValueError:
         # orig_day가 해당 월에 없으면 1일로 맞춤
-        st.session_state["selected_date"] = datetime(current_year, new_month_num, 1).date()
+    st.session_state["selected_date"] = datetime(current_year, new_month_num, 1).date()
 
 def update_month_from_date():
     st.session_state["selected_month"] = f"{st.session_state['selected_date'].month}월"
@@ -373,7 +373,6 @@ try:
         st.subheader("날짜 선택 📅")
         selected_date = st.date_input(
             "날짜를 선택하세요:",
-            #value=st.session_state["selected_date"],
             key="selected_date",
             on_change=update_month_from_date
         )
