@@ -367,7 +367,7 @@ try:
         st.subheader("날짜 선택 📅")
         selected_date = st.date_input(
             "날짜를 선택하세요:",
-            value=st.session_state["selected_date"],
+            #value=st.session_state["selected_date"],
             key="selected_date",
             on_change=update_month_from_date
         )
