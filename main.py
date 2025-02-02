@@ -492,7 +492,7 @@ try:
             return None
 
         def api_handler():
-            query_params = st.experimental_get_query_params()
+            query_params = st.query_params
             team_values = query_params.get("team")
             date_values = query_params.get("date")
             if not team_values or not date_values:
@@ -519,10 +519,10 @@ try:
                 st.write({"status": "error", "message": f"{selected_date} ({selected_team})에 해당하는 데이터를 찾을 수 없습니다."})
 
         def main_app():
-            st.write("메인 앱 실행 중입니다.")
+            pass
 
         if __name__ == "__main__":
-            params = st.experimental_get_query_params()
+            params = st.query_params
             if "team" in params and "date" in params:
                 api_handler()
             else:
