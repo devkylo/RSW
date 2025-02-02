@@ -472,20 +472,6 @@ try:
 
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
 
-        def get_json_file_path(date, team):
-            today_schedules_root_dir = "team_today_schedules"
-            today_team_folder_path = os.path.join(today_schedules_root_dir, team)
-            month_folder = os.path.join(today_team_folder_path, date[:7])
-            json_file_path = os.path.join(month_folder, f"{date}_schedule.json")
-            return json_file_path
-
-        def load_json_data(file_path):
-            if os.path.exists(file_path):
-                with open(file_path, "r", encoding="utf-8") as file:
-                    return json.load(file)
-            else:
-                return None
-
         def validate_date_format(date_str):
             try:
                 datetime.strptime(date_str, "%Y-%m-%d")
@@ -493,44 +479,54 @@ try:
             except ValueError:
                 return False
 
-        def main():
-            query_params = st.query_params
-            api_team_list = query_params.get_all("team")
-            api_date_list = query_params.get_all("date")
+        def get_json_file_path(date_str, team):
+            today_team_path = os.path.join("team_today_schedules", team)
+            month_folder = os.path.join(today_team_path, date_str[:7])
+            json_file_path = os.path.join(month_folder, f"{date_str}_schedule.json")
+            return json_file_path
 
-            def decode_query_param(param_list):
-                return [unquote(param) for param in param_list]
+        def load_json_data(file_path):
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return None
 
-            decoded_team_list = decode_query_param(api_team_list)
-            decoded_date_list = decode_query_param(api_date_list)
-
-            if not decoded_team_list or not decoded_date_list:
+        def api_handler():
+            query_params = st.experimental_get_query_params()
+            team_values = query_params.get("team")
+            date_values = query_params.get("date")
+            if not team_values or not date_values:
+                st.write({"status": "error", "message": "team 과 date 파라미터가 필요합니다."})
                 return
 
-            selected_team_api = decoded_team_list[0]
-            selected_date_api = decoded_date_list[0]
-
-            if not validate_date_format(selected_date_api):
-                st.write({
-                    "status": "error",
-                    "message": "날짜 형식이 올바르지 않습니다. 'YYYY-MM-DD' 형식이어야 합니다."
-                })
+            # URL 인코딩된 값 복원
+            selected_team = unquote(team_values)
+            selected_date = unquote(date_values)
+            
+            # 날짜 형식 검사
+            try:
+                datetime.strptime(selected_date, "%Y-%m-%d")
+            except ValueError:
+                st.write({"status": "error", "message": "날짜 형식은 YYYY-MM-DD 이어야 합니다."})
                 return
 
-            json_file_path = get_json_file_path(selected_date_api, selected_team_api)
+            json_file_path = get_json_file_path(selected_date, selected_team)
             schedule_data = load_json_data(json_file_path)
             if schedule_data:
-                st.write({
-                    "data": schedule_data
-                })
+                json_str = json.dumps({"data": schedule_data}, ensure_ascii=False, indent=2)
+                st.markdown(f"<pre>{json_str}</pre>", unsafe_allow_html=True)
             else:
-                st.write({
-                    "status": "error",
-                    "message": f"{selected_date_api} ({selected_team_api})에 해당하는 데이터를 찾을 수 없습니다."
-                })
+                st.write({"status": "error", "message": f"{selected_date} ({selected_team})에 해당하는 데이터를 찾을 수 없습니다."})
+
+        def main_app():
+            st.write("메인 앱 실행 중입니다.")
 
         if __name__ == "__main__":
-            main()
+            params = st.experimental_get_query_params()
+            if "team" in params and "date" in params:
+                api_handler()
+            else:
+                main_app()
 
     except FileNotFoundError:
         st.error("❌ 범례가 등록 되지 않았습니다.")
