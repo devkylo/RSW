@@ -17,20 +17,19 @@ current_year = today_date.year
 current_month = today_date.month
 
 # -------------- 1) GitHub 관련 함수 --------------
-
-# Git 파일 변경사항을 커밋하고 푸시하는 함수
-def git_auto_commit(file_path, team_name):
-    commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
-    os.system(f'cd {schedules_root_dir} && git add {file_path}')
-    os.system(f'cd {schedules_root_dir} && git commit -m "{commit_message}"')
-    os.system(f'cd {schedules_root_dir} && git push origin main')
-
 def git_init_repo():
     """Git 저장소 초기화 및 원격 연결"""
     if not os.path.exists(schedules_root_dir):
         os.makedirs(schedules_root_dir, exist_ok=True)
         os.system(f'cd {schedules_root_dir} && git init')
         os.system(f'cd {schedules_root_dir} && git remote add origin {st.secrets["GITHUB"]["REPO_URL"]}')
+
+def git_auto_commit(file_path, team_name):
+    """변경사항 자동 커밋"""
+    commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
+    os.system(f'cd {schedules_root_dir} && git add {file_path}')
+    os.system(f'cd {schedules_root_dir} && git commit -m "{commit_message}"')
+    os.system(f'cd {schedules_root_dir} && git push origin main')
 
 def git_pull_changes():
     """최신 변경사항 동기화"""
@@ -51,7 +50,6 @@ def encrypt_data(data):
     return cipher.encrypt(data.encode())
 
 # -------------- 2) 디렉토리 생성 및 기본 폴더 설정 --------------
-# 메인 Git 리포지토리(root) 경로(팀별 스케줄 관련 파일 저장)
 schedules_root_dir = "team_schedules"
 model_example_root_dir = "team_model_example"
 today_schedules_root_dir = "team_today_schedules"  # 매일 근무자 dir 생성
@@ -104,7 +102,7 @@ st.sidebar.selectbox(
     on_change=update_date_from_month
 )
 
-# -------------- 각 팀별 폴더 경로 설정 --------------
+# -------------- 폴더 경로 설정 --------------
 schedules_folder_path = os.path.join(schedules_root_dir, selected_team)
 model_example_folder_path = os.path.join(model_example_root_dir, selected_team)
 today_team_folder_path = os.path.join(today_schedules_root_dir, selected_team)
@@ -120,12 +118,12 @@ start_date = datetime(current_year, selected_month_num, 1)
 end_date = (start_date + timedelta(days=31)).replace(day=1) - timedelta(days=1)
 date_list = [(start_date + timedelta(days=i)) for i in range((end_date - start_date).days + 1)]
 
-# 파일 경로 설정 (근무표, 범례, 메모)
+# 파일 경로 설정
 schedules_file_path = os.path.join(schedules_folder_path, f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv")
 model_example_file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
 memo_file_path = os.path.join(memo_team_folder_path, f"{current_year}_{st.session_state['selected_month']}_memos.json")
 
-# -------------- 사이드바: 메모 입력 (Blob 방식 저장) --------------
+# -------------- 사이드바: 메모 입력 (Blob 형태로 저장) --------------
 st.sidebar.title("메모 추가 ✏️")
 if 'new_memo_text' not in st.session_state:
     st.session_state.new_memo_text = ""
@@ -135,12 +133,14 @@ if 'author_name' not in st.session_state:
 def get_korea_time():
     return datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M:%S')
 
+# 메모를 blob으로 저장하도록 처리 : json 문자열로 변환 후 utf-8로 인코딩하여 기록
 def save_memo_with_reset(memo_file_path, memo_text, author=""):
     memo_data = {
         "note": memo_text,
         "author": author,
         "timestamp": get_korea_time()
     }
+    # 기존 파일 존재 시 바이너리로 읽어 decode한 후 JSON 파싱
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "rb") as f:
             file_content = f.read().decode("utf-8")
@@ -204,8 +204,8 @@ if password:
     if password == correct_password:
         st.session_state.admin_authenticated = True
         st.sidebar.success(f"{selected_team} 관리자 모드 활성화 ✨")
-        
-        # 근무표 파일 업로드 (Blob 방식 저장 및 Git 커밋)
+
+        # 근무표 파일 업로드 (Blob 방식 저장)
         uploaded_schedule_file = st.sidebar.file_uploader(
             f"{selected_team} 근무표 파일 업로드 🔼",
             type=["xlsx", "csv"],
@@ -224,10 +224,10 @@ if password:
 
             if st.session_state.schedules_upload_confirmed:
                 try:
-                    # 업로드된 파일을 지정 폴더에 저장 후 Git 커밋
-                    with open(schedules_file_path, "wb") as f:
+                    file_path = os.path.join(schedules_folder_path, f"{current_year}_{st.session_state['selected_month']}_{selected_team}_schedule.csv")
+                    with open(file_path, "wb") as f:
                         f.write(uploaded_schedule_file.getvalue())
-                    git_auto_commit(schedules_file_path, selected_team)
+                    git_auto_commit(file_path, selected_team)
                     st.sidebar.success(f"{st.session_state['selected_month']} 근무표 업로드(Blob 저장) 완료 ⭕")
                 except Exception as save_error:
                     st.sidebar.error(f"파일 처리 중 오류: {save_error}")
@@ -245,7 +245,7 @@ if password:
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
-        # 범례 파일 업로드 (Blob 방식 저장 및 Git 커밋)
+        # 범례 파일 업로드 (Blob 방식 저장)
         uploaded_model_example_file = st.sidebar.file_uploader(
             f"{selected_team} 범례 파일 업로드 🔼",
             type=["xlsx", "csv"],
@@ -264,9 +264,10 @@ if password:
 
             if st.session_state.model_example_upload_confirmed:
                 try:
-                    with open(model_example_file_path, "wb") as f:
+                    file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
+                    with open(file_path, "wb") as f:
                         f.write(uploaded_model_example_file.getvalue())
-                    git_auto_commit(model_example_file_path, selected_team)
+                    git_auto_commit(file_path, selected_team)
                     st.sidebar.success(f"{selected_team} 범례 업로드(Blob 저장) 완료 ⭕")
                 except Exception as save_error:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {save_error}")
@@ -289,7 +290,7 @@ st.sidebar.markdown("🙋:blue[문의 : 관제SO팀]")
 
 # -------------- 업로드된 근무표 활용 (CSV 파일 읽기) --------------
 try:
-    df = pd.read_csv(schedules_file_path, encoding='utf-8-sig')
+    df = pd.read_csv(schedules_file_path)
     if st.session_state["selected_date"].month == current_month:
         default_date = today_date
     else:
@@ -348,7 +349,7 @@ try:
                             columns={"파트 구분": "파트", today_column: "근무"}
                         )
                         part_display_day["파트"] = part_display_day["파트"].replace("총괄", "팀장")
-                        part_display_day.index = ['🌇'] * len(part_display_day)
+                        part_display_day.index = ['🌇']*len(part_display_day)
                         st.table(part_display_day)
                 else:
                     st.write("주간 근무자가 없습니다.")
@@ -361,7 +362,7 @@ try:
                             columns={"파트 구분": "파트", today_column: "근무"}
                         )
                         part_display_night["파트"] = part_display_night["파트"].replace("총괄", "팀장")
-                        part_display_night.index = ['🌃'] * len(part_display_night)
+                        part_display_night.index = ['🌃']*len(part_display_night)
                         st.table(part_display_night)
                 else:
                     st.write("야간 근무자가 없습니다.")
@@ -374,7 +375,7 @@ try:
                         columns={"파트 구분": "파트", today_column: "근무"}
                     )
                     vacation_display["파트"] = vacation_display["파트"].replace("총괄", "팀장")
-                    vacation_display.index = ['🌄'] * len(vacation_display)
+                    vacation_display.index = ['🌄']*len(vacation_display)
                     st.table(vacation_display)
                 else:
                     st.write("휴가 근무자가 없습니다.")
@@ -382,7 +383,7 @@ try:
         else:
             st.warning(f"선택한 날짜 ({today_column})에 해당하는 데이터가 없습니다.")
 
-        # -------------- 매월 JSON 저장 (일별 스케줄 백업) --------------
+        # 매월 JSON 저장
         def save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping):
             for date in date_list:
                 month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
@@ -519,7 +520,7 @@ try:
 except FileNotFoundError:
     st.info(f"❌ {st.session_state['selected_month']} 근무표가 등록되지 않았습니다.")
 
-# -------------- 메모 내용 표시 및 삭제 (Blob 방식의 메모 파일) --------------
+# -------------- 메모 내용 표시 및 삭제 (Blob 형태의 메모 파일) --------------
 st.header(f"{selected_team} - {st.session_state['selected_month']} 메모 📓")
 
 def load_memos(memo_file_path):
