@@ -11,6 +11,11 @@ from collections import defaultdict
 from urllib.parse import unquote
 from cryptography.fernet import Fernet
 
+#################################################
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
 korea_tz = pytz.timezone("Asia/Seoul")
 today_date = datetime.now(korea_tz)
 current_year = today_date.year
@@ -490,65 +495,90 @@ try:
 
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
 
+        app = FastAPI()
+
+        # CORS 설정 (필요에 따라 수정)
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
         # -------------------------------------------------------------------------------
         # API 관련 함수 및 헬퍼 함수
         # -------------------------------------------------------------------------------
 
-        def get_json_file_path(date_str, team):
+        def get_json_file_path(date_str: str, team: str) -> str:
+            """
+            team_today_schedules 폴더 내에서 해당 팀, 해당 월 폴더를 찾아 JSON 파일 경로를 반환
+            """
             today_team_path = os.path.join("team_today_schedules", team)
             month_folder = os.path.join(today_team_path, date_str[:7])
             json_file_path = os.path.join(month_folder, f"{date_str}_schedule.json")
             return json_file_path
-        
-        def load_json_data(file_path):
+
+        def load_json_data(file_path: str):
+            """
+            파일이 존재하면 JSON 파일을 로드하여 반환, 없으면 None 반환
+            """
             if os.path.exists(file_path):
                 with open(file_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             return None
 
-        def validate_date_format(date_str):
+        def validate_date_format(date_str: str) -> bool:
+            """
+            날짜가 "YYYY-MM-DD" 포맷인지 검사
+            """
             try:
                 datetime.strptime(date_str, "%Y-%m-%d")
                 return True
             except ValueError:
                 return False
-        
-        def api_handler():
-            query_params = st.query_params
-            team_values = query_params.get("team")
-            date_values = query_params.get("date")
-            if not team_values or not date_values:
-                st.write({"status": "error", "message": "team 과 date 파라미터가 필요합니다."})
-                return
-        
-            # URL 인코딩된 값 복원
-            selected_team = unquote(team_values)
-            selected_date = unquote(date_values)
+
+        # -------------------------------------------------------------------------------
+        # FastAPI 엔드포인트
+        # -------------------------------------------------------------------------------
+
+        @app.get("/api/schedule")
+        def api_schedule(team: str, date: str):
+            """
+            쿼리 파라미터 team, date (YYYY-MM-DD 형식)을 받아 JSON 스케줄 데이터를 반환
+            """
+            if not team or not date:
+                raise HTTPException(status_code=400, detail="team과 date 파라미터가 필요합니다.")
+
+            if not validate_date_format(date):
+                raise HTTPException(status_code=400, detail="날짜 형식은 YYYY-MM-DD 이어야 합니다.")
             
-            # 날짜 형식 검사
-            try:
-                datetime.strptime(selected_date, "%Y-%m-%d")
-            except ValueError:
-                st.write({"status": "error", "message": "날짜 형식은 YYYY-MM-DD 이어야 합니다."})
-                return
-        
-            json_file_path = get_json_file_path(selected_date, selected_team)
+            json_file_path = get_json_file_path(date, team)
             schedule_data = load_json_data(json_file_path)
-            if schedule_data:
-                json_str = json.dumps({"data": schedule_data}, ensure_ascii=False, indent=2)
-                st.markdown(f"<pre>{json_str}</pre>", unsafe_allow_html=True)
-            else:
-                st.write({"status": "error", "message": f"{selected_date} ({selected_team})에 해당하는 데이터를 찾을 수 없습니다."})
-        
-        def main_app():
-            pass
-        
+            
+            if schedule_data is None:
+                raise HTTPException(status_code=404, 
+                                    detail=f"{date} ({team})에 해당하는 데이터를 찾을 수 없습니다.")
+            
+            return {"data": schedule_data}
+
+        # -------------------------------------------------------------------------------
+        # 만약 추가 기능(예: 메모, GitHub 동기화 등)이 필요하다면
+        # 관련 로직을 별도의 엔드포인트로 추가하여 구성할 수 있습니다.
+        # (아래는 참고용 주석 처리)
+        # def git_init_repo():
+        #     ...
+        #
+        # @app.post("/api/memo")
+        # def save_memo(...):
+        #     ...
+
+        # -------------------------------------------------------------------------------
+        # uvicorn 실행 (로컬 개발 시)
+        # -------------------------------------------------------------------------------
         if __name__ == "__main__":
-            params = st.query_params
-            if "team" in params and "date" in params:
-                api_handler()
-            else:
-                main_app()
+            import uvicorn
+            uvicorn.run(app, host="0.0.0.0", port=8000)
 
     except FileNotFoundError:
         st.error("❌ 범례가 등록 되지 않았습니다.")
