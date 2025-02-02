@@ -541,7 +541,7 @@ try:
                 st.write({"status": "error", "message": f"{selected_date} ({selected_team})에 해당하는 데이터를 찾을 수 없습니다."})
         
         def main_app():
-            st.write("메인 앱 실행 중입니다.")
+            pass
         
         if __name__ == "__main__":
             params = st.query_params
