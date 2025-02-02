@@ -398,7 +398,7 @@ def load_json_data(file_path):
     return None
 
 def api_handler():
-    query_params = st.experimental_get_query_params()
+    query_params = st.query_params
     team_values = query_params.get("team")
     date_values = query_params.get("date")
     if not team_values or not date_values:
@@ -428,7 +428,7 @@ def main_app():
     st.write("메인 앱 실행 중입니다.")
 
 if __name__ == "__main__":
-    params = st.experimental_get_query_params()
+    params = st.query_params
     if "team" in params and "date" in params:
         api_handler()
     else:
