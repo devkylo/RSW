@@ -552,66 +552,6 @@ try:
             else:
                 main_app()
 
-        """def get_json_file_path(date, team):
-            today_schedules_root_dir = "team_today_schedules"
-            today_team_folder_path = os.path.join(today_schedules_root_dir, team)
-            month_folder = os.path.join(today_team_folder_path, date[:7])
-            json_file_path = os.path.join(month_folder, f"{date}_schedule.json")
-            return json_file_path
-
-        def load_json_data(file_path):
-            if os.path.exists(file_path):
-                with open(file_path, "r", encoding="utf-8") as file:
-                    return json.load(file)
-            else:
-                return None
-
-        def validate_date_format(date_str):
-            try:
-                datetime.strptime(date_str, "%Y-%m-%d")
-                return True
-            except ValueError:
-                return False
-
-        def main():
-            query_params = st.query_params
-            api_team_list = query_params.get_all("team")
-            api_date_list = query_params.get_all("date")
-
-            def decode_query_param(param_list):
-                return [unquote(param) for param in param_list]
-
-            decoded_team_list = decode_query_param(api_team_list)
-            decoded_date_list = decode_query_param(api_date_list)
-
-            if not decoded_team_list or not decoded_date_list:
-                return
-
-            selected_team_api = decoded_team_list[0]
-            selected_date_api = decoded_date_list[0]
-
-            if not validate_date_format(selected_date_api):
-                st.write({
-                    "status": "error",
-                    "message": "날짜 형식이 올바르지 않습니다. 'YYYY-MM-DD' 형식이어야 합니다."
-                })
-                return
-
-            json_file_path = get_json_file_path(selected_date_api, selected_team_api)
-            schedule_data = load_json_data(json_file_path)
-            if schedule_data:
-                st.write({
-                    "data": schedule_data
-                })
-            else:
-                st.write({
-                    "status": "error",
-                    "message": f"{selected_date_api} ({selected_team_api})에 해당하는 데이터를 찾을 수 없습니다."
-                })
-
-        if __name__ == "__main__":
-            main()"""
-
     except FileNotFoundError:
         st.error("❌ 범례가 등록 되지 않았습니다.")
     except Exception as e:
