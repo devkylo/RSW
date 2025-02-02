@@ -514,43 +514,30 @@ try:
 
         def api_handler():
             query_params = st.query_params
-            team_list = query_params.get_all("team")
-            date_list = query_params.get_all("date")
-            if not team_list or not date_list:
+            team_values = query_params.get("team")
+            date_values = query_params.get("date")
+            if not team_values or not date_values:
                 st.write({"status": "error", "message": "team 과 date 파라미터가 필요합니다."})
                 return
-
-            selected_team_api = team_list[0]
-            selected_date_api = date_list[0]
-
-            # 날짜 형식 검사
-            try:
-                datetime.strptime(selected_date_api, "%Y-%m-%d")
-            except ValueError:
-                st.write({"status": "error", "message": "날짜 형식은 YYYY-MM-DD 이어야 합니다."})
-                return
-
-            json_file_path = get_json_file_path(selected_date_api, selected_team_api)
+        
+            selected_team = team_values[0]
+            selected_date = date_values[0]
+            # (여기서 날짜 형식 검사 등을 추가)
+            json_file_path = get_json_file_path(selected_date, selected_team)
             schedule_data = load_json_data(json_file_path)
             if schedule_data:
-                st.json({"data": schedule_data})
+                # JSON 문자열을 <pre> 태그로 감싸면 브라우저에서 직접 복사 가능
+                json_str = json.dumps({"data": schedule_data}, ensure_ascii=False, indent=2)
+                st.markdown(f"<pre>{json_str}</pre>", unsafe_allow_html=True)
             else:
-                st.write({"status": "error", "message": f"{selected_date_api} ({selected_team_api})에 해당하는 데이터를 찾을 수 없습니다."})
-
-        def main_app():
-            # 위에 정의된 기본 스트림릿 앱 로직 모두가 main_app()에서 실행됩니다.
-            # (이미 위에서 실행한 내용이 있으므로, 중복 실행하지 않도록 별도 분리)
-            pass
-
-        # -------------------------------------------------------------------------------
-        # __main__ 조건문: 쿼리 파라미터에 따라 API 모드와 일반 앱 모드를 분기
-        # -------------------------------------------------------------------------------
+                st.write({"status": "error", "message": f"{selected_date} ({selected_team})에 해당하는 데이터를 찾을 수 없습니다."})
+        
         if __name__ == "__main__":
             params = st.query_params
             if "team" in params and "date" in params:
                 api_handler()
             else:
-                main_app()
+                main_app()  # 기존 앱 로직 실행
 
     except FileNotFoundError:
         st.error("❌ 범례가 등록 되지 않았습니다.")
