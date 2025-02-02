@@ -5,3 +5,5 @@ charset-normalizer
 streamlit-aggrid
 cryptography
 gitpython
+fastapi
+uvicorn
