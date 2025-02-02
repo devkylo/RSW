@@ -13,7 +13,7 @@ from cryptography.fernet import Fernet
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddlewar
+from fastapi.middleware.cors import CORSMiddleware
 
 korea_tz = pytz.timezone("Asia/Seoul")
 today_date = datetime.now(korea_tz)
