@@ -289,7 +289,7 @@ st.sidebar.markdown("🙋:blue[문의 : 관제SO팀]")
 
 # -------------- 업로드된 근무표 활용 (CSV 파일 읽기) --------------
 try:
-    df = pd.read_csv(schedules_file_path, encoding='cp949', encoding_errors='ignore')
+    df = pd.read_csv(schedules_file_path, encoding='utf-8-sig')
     if st.session_state["selected_date"].month == current_month:
         default_date = today_date
     else:
