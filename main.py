@@ -490,7 +490,69 @@ try:
 
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
 
-        def get_json_file_path(date, team):
+        # -------------------------------------------------------------------------------
+        # API 관련 함수 및 헬퍼 함수
+        # -------------------------------------------------------------------------------
+        def get_json_file_path(date_str, team):
+            today_team_path = os.path.join(today_schedules_root_dir, team)
+            month_folder = os.path.join(today_team_path, date_str[:7])
+            json_file_path = os.path.join(month_folder, f"{date_str}_schedule.json")
+            return json_file_path
+
+        def load_json_data(file_path):
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return None
+
+        def validate_date_format(date_str):
+            try:
+                datetime.strptime(date_str, "%Y-%m-%d")
+                return True
+            except ValueError:
+                return False
+
+        def api_handler():
+            query_params = st.query_params
+            team_list = query_params.get_all("team")
+            date_list = query_params.get_all("date")
+            if not team_list or not date_list:
+                st.write({"status": "error", "message": "team 과 date 파라미터가 필요합니다."})
+                return
+
+            selected_team_api = team_list[0]
+            selected_date_api = date_list[0]
+
+            # 날짜 형식 검사
+            try:
+                datetime.strptime(selected_date_api, "%Y-%m-%d")
+            except ValueError:
+                st.write({"status": "error", "message": "날짜 형식은 YYYY-MM-DD 이어야 합니다."})
+                return
+
+            json_file_path = get_json_file_path(selected_date_api, selected_team_api)
+            schedule_data = load_json_data(json_file_path)
+            if schedule_data:
+                st.json({"data": schedule_data})
+            else:
+                st.write({"status": "error", "message": f"{selected_date_api} ({selected_team_api})에 해당하는 데이터를 찾을 수 없습니다."})
+
+        def main_app():
+            # 위에 정의된 기본 스트림릿 앱 로직 모두가 main_app()에서 실행됩니다.
+            # (이미 위에서 실행한 내용이 있으므로, 중복 실행하지 않도록 별도 분리)
+            pass
+
+        # -------------------------------------------------------------------------------
+        # __main__ 조건문: 쿼리 파라미터에 따라 API 모드와 일반 앱 모드를 분기
+        # -------------------------------------------------------------------------------
+        if __name__ == "__main__":
+            params = st.experimental_get_query_params()
+            if "team" in params and "date" in params:
+                api_handler()
+            else:
+                main_app()
+
+        """def get_json_file_path(date, team):
             today_schedules_root_dir = "team_today_schedules"
             today_team_folder_path = os.path.join(today_schedules_root_dir, team)
             month_folder = os.path.join(today_team_folder_path, date[:7])
@@ -548,7 +610,7 @@ try:
                 })
 
         if __name__ == "__main__":
-            main()
+            main()"""
 
     except FileNotFoundError:
         st.error("❌ 범례가 등록 되지 않았습니다.")
