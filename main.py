@@ -522,8 +522,8 @@ try:
                 return
         
             # URL 인코딩된 값 복원
-            selected_team = urllib.parse.unquote(team_values[0])
-            selected_date = urllib.parse.unquote(date_values[0])
+            selected_team = unquote(team_values)
+            selected_date = unquote(date_values)
             
             # 날짜 형식 검사
             try:
