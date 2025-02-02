@@ -546,7 +546,7 @@ try:
         # __main__ 조건문: 쿼리 파라미터에 따라 API 모드와 일반 앱 모드를 분기
         # -------------------------------------------------------------------------------
         if __name__ == "__main__":
-            params = st.experimental_get_query_params()
+            params = st.query_params
             if "team" in params and "date" in params:
                 api_handler()
             else:
