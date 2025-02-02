@@ -133,20 +133,21 @@ if 'author_name' not in st.session_state:
 def get_korea_time():
     return datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M:%S')
 
-# 메모를 blob으로 저장하도록 수정 (데이터를 json 문자열로 변환 후 utf-8로 인코딩하여 기록)
+# 메모를 blob으로 저장하도록 처리 : json 문자열로 변환 후 utf-8로 인코딩하여 기록
 def save_memo_with_reset(memo_file_path, memo_text, author=""):
     memo_data = {
         "note": memo_text,
         "author": author,
         "timestamp": get_korea_time()
     }
-    # 파일이 존재하면 바이너리로 불러와 디코딩 후 JSON 파싱
+    # 기존 파일 존재 시 바이너리로 읽어 decode한 후 JSON 파싱
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "rb") as f:
             file_content = f.read().decode("utf-8")
             memos_list = json.loads(file_content)
     else:
         memos_list = []
+    # 중복 체크
     for existing_memo in memos_list:
         if (existing_memo["note"] == memo_data["note"] and
             existing_memo["author"] == memo_data["author"] and
@@ -204,7 +205,7 @@ if password:
         st.session_state.admin_authenticated = True
         st.sidebar.success(f"{selected_team} 관리자 모드 활성화 ✨")
 
-        # 근무표 파일 업로드 (Blob 형태로 저장)
+        # 근무표 파일 업로드 (Blob 방식 저장)
         uploaded_schedule_file = st.sidebar.file_uploader(
             f"{selected_team} 근무표 파일 업로드 🔼",
             type=["xlsx", "csv"],
@@ -244,7 +245,7 @@ if password:
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
-        # 범례 파일 업로드 (Blob 형태로 저장)
+        # 범례 파일 업로드 (Blob 방식 저장)
         uploaded_model_example_file = st.sidebar.file_uploader(
             f"{selected_team} 범례 파일 업로드 🔼",
             type=["xlsx", "csv"],
@@ -367,7 +368,7 @@ try:
                     st.write("야간 근무자가 없습니다.")
 
                 st.write("휴가 근무자 🌴")
-                vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차","숙/연차"]
+                vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
                 vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
                 if not vacation_shift.empty:
                     vacation_display = vacation_shift[["파트 구분", "이름", today_column]].rename(
@@ -548,10 +549,10 @@ if memos_list:
         timestamp_obj = datetime.strptime(memo['timestamp'], '%Y-%m-%d %H:%M:%S')
         formatted_timestamp = timestamp_obj.strftime('%Y-%m-%d %H:%M')
         st.markdown(f"📢 **{memo['author']}**님 ({formatted_timestamp})")
-        st.write("🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻")
+        st.write("🔻" * 20)
         memo_content = memo["note"].replace("\n", "  \n")
         st.markdown(memo_content)
-        st.write("🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺")
+        st.write("🔺" * 20)
         if st.button(
             f"🙋 삭제는 관리자에게 문의 부탁드립니다!🗑️ ◽작성자 : {memo['author']} ◽작성시간 : ({formatted_timestamp})",
             key=f"delete_{formatted_timestamp}_{idx}",
