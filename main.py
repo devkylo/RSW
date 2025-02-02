@@ -140,7 +140,7 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
         "author": author,
         "timestamp": get_korea_time()
     }
-    # 기존 파일 존재 시 바이너리로 읽어 decode한 후 JSON 파싱
+    # 기존 파일이 있으면 바이너리로 읽어 utf-8 디코딩 후 json 파싱
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "rb") as f:
             file_content = f.read().decode("utf-8")
@@ -204,7 +204,7 @@ if password:
     if password == correct_password:
         st.session_state.admin_authenticated = True
         st.sidebar.success(f"{selected_team} 관리자 모드 활성화 ✨")
-
+        
         # 근무표 파일 업로드 (Blob 방식 저장)
         uploaded_schedule_file = st.sidebar.file_uploader(
             f"{selected_team} 근무표 파일 업로드 🔼",
@@ -290,7 +290,8 @@ st.sidebar.markdown("🙋:blue[문의 : 관제SO팀]")
 
 # -------------- 업로드된 근무표 활용 (CSV 파일 읽기) --------------
 try:
-    df = pd.read_csv(schedules_file_path)
+    # 인코딩 옵션 추가: 한글 파일의 경우 주로 cp949 적용 (encoding_errors='ignore'로 오류 무시)
+    df = pd.read_csv(schedules_file_path, encoding='cp949', encoding_errors='ignore')
     if st.session_state["selected_date"].month == current_month:
         default_date = today_date
     else:
@@ -311,8 +312,8 @@ try:
         )
 
     try:
-        df_schedule = pd.read_csv(schedules_file_path)
-        df_model = pd.read_csv(model_example_file_path)
+        df_schedule = pd.read_csv(schedules_file_path, encoding='cp949', encoding_errors='ignore')
+        df_model = pd.read_csv(model_example_file_path, encoding='cp949', encoding_errors='ignore')
         df_model = df_model.dropna(subset=["실제 근무", "팀 근무기호"])
         work_mapping = dict(zip(df_model["팀 근무기호"], df_model["실제 근무"]))
 
