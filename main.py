@@ -76,11 +76,11 @@ if 'git_synced' not in st.session_state:
     git_pull_changes()
     st.session_state.git_synced = True
 
-# 30분 단위 실시간 동기화
-if (datetime.now() - st.session_state.get('last_sync', datetime.now())).seconds > 1800:
+# 10분 단위 실시간 동기화
+if (datetime.now() - st.session_state.get('last_sync', datetime.now())).seconds > 600:
     git_pull_changes()
     st.session_state.last_sync = datetime.now()
-    st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
+    #st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
 
 # ------------------------------------------------------------------------------
 # Streamlit UI
