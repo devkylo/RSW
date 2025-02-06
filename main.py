@@ -134,7 +134,7 @@ def git_pull_changes():
     st.session_state.cancel_sync = False  # 동기화 시작 시 취소 플래그 초기화
     try:
         process = subprocess.Popen(
-            ["git", "pull", "origin", "main"]
+            ["git", "pull", "origin", "main"],
             cwd=repo_root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
