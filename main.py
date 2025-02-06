@@ -27,17 +27,18 @@ reset_git_config()
 # -------------------------------------------------------------------
 # 기본 설정
 # -------------------------------------------------------------------
-repo_root = "."  # 저장소 루트 (프로젝트 루트)
+#repo_root = "."  # 저장소 루트 (프로젝트 루트)
 korea_tz = pytz.timezone("Asia/Seoul")
 
 # -------------------------------------------------------------------
-# 서브모듈 디렉토리 경로 설정 (각 폴더는 개별 서브모듈로 관리됨)
+# 서브모듈 디렉토리 경로 설정 (각 폴더는 개별 서브 저장소로 관리됨)
 # -------------------------------------------------------------------
 schedules_root_dir       = "team_schedules"
 model_example_root_dir   = "team_model_example"
 today_schedules_root_dir = "team_today_schedules"
 memo_root_dir            = "team_memo"
 
+# 서브모듈 디렉토리 목록
 submodule_dirs = [
     schedules_root_dir,
     model_example_root_dir,
@@ -46,7 +47,7 @@ submodule_dirs = [
 ]
 
 # -------------------------------------------------------------------
-# 디렉토리 생성: 서브모듈 폴더가 없을 경우 생성(서브모듈은 별도의 저장소이므로)
+# 디렉토리 생성 함수: 해당 폴더가 없으면 생성 (서브 저장소는 별도 폴더)
 # -------------------------------------------------------------------
 def create_dir_safe(path):
     if not os.path.exists(path):
@@ -77,54 +78,52 @@ repo_url_mapping = st.secrets["GITHUB"].get("REPO_URL_MAPPING", {
     memo_root_dir:            st.secrets["GITHUB"]["REPO_URL_MEMO"],
 })
 # -------------------------------------------------------------------
-# [1] 서브모듈별 Git 자동 커밋 및 푸시 함수
+# [1] 서브 저장소별 Git 자동 커밋 및 푸시 함수 (수정됨)
 # -------------------------------------------------------------------
 def git_auto_commit_submodule(file_path, team_name):
-    # 파일이 속한 서브모듈 폴더 확인 (네 폴더 중 어느 곳에 있는지)
     file_path_abs = os.path.abspath(file_path)
     submodule_folder = None
+    # 각 submodule 폴더(절대경로) 내 포함 여부 체크
     for folder in submodule_dirs:
-        if file_path_abs.startswith(os.path.abspath(folder)):
-            submodule_folder = folder
+        folder_abs = os.path.abspath(folder)
+        if file_path_abs.startswith(folder_abs):
+            submodule_folder = folder_abs
             break
     if not submodule_folder:
-        st.error("해당 파일은 어떤 서브모듈에도 속하지 않습니다.")
+        st.error("해당 파일은 어떤 서브 저장소에도 속하지 않습니다.")
         return
 
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
         repo = Repo(submodule_folder, search_parent_directories=True)
-        # 파일 경로를 서브모듈 기준 상대경로로 변환
-        relative_path = os.path.relpath(file_path, os.path.abspath(submodule_folder))
+        relative_path = os.path.relpath(file_path, submodule_folder)
         if os.path.exists(file_path):
             repo.index.add([relative_path])
         else:
-            repo.index.remove([relative_path])
+            try:
+                repo.index.remove([relative_path])
+            except Exception as remove_err:
+                st.warning(f"Git remove 처리 시 문제 발생: {remove_err}")
         repo.index.commit(commit_message)
         origin = repo.remote(name='origin')
         auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
         origin.set_url(auth_url)
         origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
-        st.error(f"서브모듈 '{submodule_folder}' Git 작업 오류: {e}")
+        st.error(f"서브 저장소 '{submodule_folder}' Git 작업 오류: {e}")
 
 # -------------------------------------------------------------------
-# [2] 서브모듈별 원격 저장소의 최신 변경사항 동기화 (pull)
+# [2] 서브 저장소별 원격 변경사항 동기화 (pull)
 # -------------------------------------------------------------------
 def git_pull_submodule(submodule_folder):
-    # 폴더 존재 여부 확인
     if not os.path.isdir(submodule_folder):
-        print(f"Git 서브모듈 폴더 '{submodule_folder}'가 존재하지 않습니다.")
+        print(f"Git 서브 저장소 폴더 '{submodule_folder}'가 존재하지 않습니다.")
         return None
-
-    # 유효한 Git 저장소인지 확인 (상위 디렉토리까지 검색)
     try:
         repo = Repo(submodule_folder, search_parent_directories=True)
     except InvalidGitRepositoryError:
         print(f"폴더 '{submodule_folder}'는 유효한 Git 저장소가 아닙니다. 새 저장소를 초기화합니다.")
         repo = Repo.init(submodule_folder)
-    
-    # 원격 저장소가 설정되어 있다면 pull 시도
     try:
         if repo.remotes:
             print("Git pull 실행 중...")
@@ -134,6 +133,7 @@ def git_pull_submodule(submodule_folder):
     except Exception as e:
         print("Git pull 중 오류 발생:", e)
     return repo
+
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
 # -------------------------------------------------------------------
