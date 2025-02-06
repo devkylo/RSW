@@ -33,10 +33,16 @@ def git_init_repo():
         # 기본 브랜치를 "main"으로 명시하여 초기화
         repo = Repo.init(schedules_root_dir, initial_branch="main")
         repo.create_remote('origin', st.secrets["GITHUB"]["REPO_URL"])
-        # .gitignore 작성
+        
+        # .gitignore 생성
         gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
+            
+        # <--- 여기서 .gitignore 파일을 스테이징하고 초기 커밋을 생성합니다.
+        repo.index.add([gitignore_path])
+        repo.index.commit("Initial commit with .gitignore")
+        
         st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
 
 # -------------------------------------------------------------------
