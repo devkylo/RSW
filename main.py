@@ -123,7 +123,7 @@ def git_auto_commit(file_path, team_name, root_dir):
 def git_pull_changes():
     """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
     try:
-        repo = Repo(schedules_root_dir)
+        repo = Repo(root_dir)
         origin = repo.remote(name='origin')
         origin.pull("main")
         st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
