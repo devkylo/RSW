@@ -150,7 +150,7 @@ if 'git_initialized' not in st.session_state:
             repo = Repo(root_dir)
             origin = repo.remote(name='origin')
             # 각 디렉토리별 pull 수행
-            origin.pull('origin', 'main', '--allow-unrelated-histories')
+            origin.pull("main", "--allow-unrelated-histories")
             st.toast(f"{root_dir} GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
         except GitCommandError as e:
             st.error(f"Git 동기화 오류: {e}")
