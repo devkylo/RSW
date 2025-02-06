@@ -15,6 +15,7 @@ from git import Repo, GitCommandError
 # -------------------------------------------------------------------
 # 기본 설정
 # -------------------------------------------------------------------
+repo_root = "."  # 저장소 루트 (프로젝트 루트)
 korea_tz = pytz.timezone("Asia/Seoul")
 
 # 디렉토리 경로 설정
@@ -46,7 +47,6 @@ def build_auth_repo_url():
     repo_url = st.secrets["GITHUB"]["REPO_URL"]
     token = st.secrets["GITHUB"]["TOKEN"]
     if token:
-        # 토큰 뒤에 더미 비밀번호 ":x-oauth-basic"를 추가하여 비대화형 환경에서도 인증을 진행
         auth_repo_url = repo_url.replace("https://", f"https://{token}:x-oauth-basic@")
     else:
         auth_repo_url = repo_url
@@ -61,9 +61,9 @@ def git_init_repo():
     for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
         create_dir_safe(folder)
     
-    # 프로젝트 루트에 .git 폴더가 없으면 저장소 초기화 (저장소 루트가 "."가 됨)
-    if not os.path.exists(".git"):
-        repo = Repo.init(".", initial_branch="main")
+    # repo_root 경로에 .git 폴더가 없으면 저장소 초기화
+    if not os.path.exists(os.path.join(repo_root, ".git")):
+        repo = Repo.init(repo_root, initial_branch="main")
         auth_repo_url = build_auth_repo_url()
         repo.create_remote('origin', auth_repo_url)
         
@@ -72,7 +72,7 @@ def git_init_repo():
             config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
         
         # .gitignore 생성 - Git에 포함하지 않을 폴더만 지정 (team_schedules는 커밋)
-        gitignore_path = ".gitignore"
+        gitignore_path = os.path.join(repo_root, ".gitignore")
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
         
@@ -91,15 +91,15 @@ def git_auto_commit(file_path, team_name):
     """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        repo = Repo(".")  # repo가 프로젝트 루트에 초기화됨
-        # 파일 경로를 현재 작업 디렉토리 기준 상대 경로로 변환
-        relative_path = os.path.relpath(file_path, os.getcwd())
+        repo = Repo(repo_root)  # repo_root 기준으로 작업
+        # file_path를 repo_root 기준 상대경로로 변환
+        relative_path = os.path.relpath(file_path, repo_root)
         repo.index.add([relative_path])
         repo.index.commit(commit_message)
         
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        # push 전에 최신 PAT가 포함된 URL로 설정
+        # push 전에 최신 PAT가 포함된 URL로 재설정
         origin.set_url(build_auth_repo_url())
         origin.push("HEAD:refs/heads/main")
         
@@ -113,7 +113,7 @@ def git_auto_commit(file_path, team_name):
 def git_pull_changes():
     """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
     try:
-        repo = Repo(".")
+        repo = Repo(repo_root)
         origin = repo.remote(name='origin')
         origin.pull("main")
         st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
