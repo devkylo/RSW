@@ -100,7 +100,7 @@ def git_auto_commit(file_path, team_name):
         # 로컬 브랜치를 강제로 "main"으로 변경
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        # 원격 URL을 재설정하여 인증 정보가 포함되도록 함
+        # 원격 URL을 최신 인증 URL로 재설정 (토큰 등이 포함된 URL)
         origin.set_url(build_auth_repo_url())
         # HEAD 기준으로 원격 main 브랜치에 push
         origin.push("HEAD:refs/heads/main")
