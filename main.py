@@ -113,6 +113,18 @@ def git_auto_commit_submodule(file_path, team_name):
 def git_pull_submodule(submodule_folder):
     try:
         repo = Repo(submodule_folder)
+    except InvalidGitRepositoryError:
+        st.info(f"서브모듈 '{submodule_folder}'가 초기화되지 않았습니다. 초기화를 시도합니다.")
+        auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
+        try:
+            # 서브모듈 폴더 클론
+            repo = Repo.clone_from(auth_url, submodule_folder)
+            st.success(f"서브모듈 '{submodule_folder}' 초기화 완료")
+        except Exception as clone_error:
+            st.error(f"서브모듈 '{submodule_folder}' 초기화 중 오류: {clone_error}")
+            return
+    
+    try:
         origin = repo.remote(name='origin')
         origin.pull("main")
     except GitCommandError as e:
