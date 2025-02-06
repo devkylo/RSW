@@ -109,17 +109,18 @@ def git_init_repo():
             gitignore_path = os.path.join(root_dir, ".gitignore")
             with open(gitignore_path, "w") as f:
                 f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
-            
-            # 모든 팀 디렉토리를 Git에 추가
+
+            # 모든 팀 디렉토리의 placeholder 파일(.gitkeep)을 Git에 추가
             for team in teams:
                 team_dir = os.path.join(root_dir, team)
-                if os.path.exists(team_dir):
-                    repo.index.add([team_dir])
-            
+                placeholder_file = os.path.join(team_dir, ".gitkeep")
+                if os.path.exists(placeholder_file):
+                    repo.index.add([placeholder_file])
+
             # .gitignore 추가 및 초기 커밋
             repo.index.add([gitignore_path])
             repo.index.commit(f"Initial commit with team directories for {root_dir}")
-            
+
             # 로컬 브랜치를 main으로 설정
             repo.git.branch("-M", "main")
         
