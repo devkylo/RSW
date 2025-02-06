@@ -347,13 +347,12 @@ if password:
                     # 근무표 CSV 파일 저장 및 Git 커밋 (schedules_root_dir)
                     df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
                     git_auto_commit(schedules_file_path, selected_team, schedules_root_dir)
-                    
+
                     # today_schedules JSON 파일 생성 및 Git 커밋 (today_schedules_root_dir)
-                    # date_list와 today_team_folder_path는 별도 정의된 변수
                     if work_mapping:
                         save_monthly_schedules_to_json(date_list, today_team_folder_path, df, work_mapping)
                     else:
-                        st.sidebar.warning("work_mapping이 정의되지 않아 today_schedules JSON 생성이 건너뜁니다.")
+                        st.sidebar.warning("work_mapping이 정의되어 있지 않아 today_schedules JSON 생성이 건너뜁니다.")
                     
                     st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
@@ -570,41 +569,58 @@ try:
         else:
             st.warning(f"선택한 날짜 ({today_column})에 해당하는 데이터가 없습니다.")
 
+        # 날짜별 JSON 스케줄 생성 및 Git 커밋 함수 (today_schedules_root_dir에 적용)
         def save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping):
+            # CSV 파일의 컬럼명에서 좌우 공백 제거 (한번만 적용)
+            df_schedule.columns = df_schedule.columns.str.strip()
+            
             for date in date_list:
+                # 월별 폴더 생성 (예: "2024-05")
                 month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
-                create_dir_safe(month_folder)  # 월별 폴더 생성
+                create_dir_safe(month_folder)
                 
+                # JSON 파일 저장 경로 생성 (예: 2024-05-18_schedule.json)
                 json_file_path = os.path.join(month_folder, f"{date.strftime('%Y-%m-%d')}_schedule.json")
-                today_column = f"{date.day}({['월','화','수','목','금','토','일'][date.weekday()]})"
+                
+                # 오늘 날짜에 해당하는 열 이름 (예: "18(토)")
+                weekday = ['월','화','수','목','금','토','일'][date.weekday()]
+                today_column = f"{date.day}({weekday})"
                 
                 if today_column in df_schedule.columns:
-                    df_schedule["근무 형태"] = df_schedule[today_column].map(work_mapping).fillna("")
+                    # 각 날짜마다 DataFrame 복사본 생성하여 작업 (원본 수정 방지)
+                    temp_df = df_schedule.copy()
+                    temp_df["근무 형태"] = temp_df[today_column].map(work_mapping).fillna("")
                     
-                    # 주간/야간/휴가 근무자 데이터 생성
-                    day_shift = df_schedule[df_schedule["근무 형태"].str.contains("주", na=False)].copy()
-                    night_shift = df_schedule[df_schedule["근무 형태"].str.contains("야", na=False)].copy()
-                    vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차","숙/연차"]
-                    vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
+                    # 주간, 야간, 휴가 근무자 데이터 분리
+                    day_shift = temp_df[temp_df["근무 형태"].str.contains("주", na=False)].copy()
+                    night_shift = temp_df[temp_df["근무 형태"].str.contains("야", na=False)].copy()
+                    vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
+                    vacation_shift = temp_df[temp_df[today_column].isin(vacation_keywords)].copy()
                     
+                    # JSON 데이터 구성
                     schedule_data = {
                         "date": date.strftime('%Y-%m-%d'),
-                        "day_shift": day_shift[["파트 구분", "이름", today_column]].rename(
-                            columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records"),
-                        "night_shift": night_shift[["파트 구분", "이름", today_column]].rename(
-                            columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records"),
-                        "vacation_shift": vacation_shift[["파트 구분", "이름", today_column]].rename(
-                            columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
+                        "day_shift": day_shift[["파트 구분", "이름", today_column]]
+                                        .rename(columns={"파트 구분": "파트", today_column: "근무"})
+                                        .to_dict(orient="records"),
+                        "night_shift": night_shift[["파트 구분", "이름", today_column]]
+                                        .rename(columns={"파트 구분": "파트", today_column: "근무"})
+                                        .to_dict(orient="records"),
+                        "vacation_shift": vacation_shift[["파트 구분", "이름", today_column]]
+                                        .rename(columns={"파트 구분": "파트", today_column: "근무"})
+                                        .to_dict(orient="records")
                     }
                     
                     # JSON 파일 저장
                     with open(json_file_path, "w", encoding="utf-8") as json_file:
                         json.dump(schedule_data, json_file, ensure_ascii=False, indent=4)
                     
-                    # Git에 커밋
+                    # Git 자동 커밋 및 푸시 (today_schedules_root_dir 사용)
                     git_auto_commit(json_file_path, selected_team, today_schedules_root_dir)
+                else:
+                    st.warning(f"'{today_column}' 열이 존재하지 않아 {date.strftime('%Y-%m-%d')} JSON 파일은 생성되지 않습니다.")
 
-        save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
+
 
         def validate_date_format(date_str):
             try:
