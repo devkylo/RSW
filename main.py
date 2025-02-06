@@ -11,7 +11,16 @@ from collections import defaultdict
 from urllib.parse import unquote
 from cryptography.fernet import Fernet
 from git import Repo, GitCommandError
+import subprocess
 
+# -------------------------------------------------------------------
+# Git 사용자 정보 강제 재설정 함수
+# -------------------------------------------------------------------
+def reset_git_config():
+    subprocess.run(['git', 'config', '--global', 'user.name', st.secrets["GITHUB"]["USER_NAME"]])
+    subprocess.run(['git', 'config', '--global', 'user.email', st.secrets["GITHUB"]["USER_EMAIL"]])
+
+reset_git_config()
 # -------------------------------------------------------------------
 # 기본 설정
 # -------------------------------------------------------------------
