@@ -93,11 +93,16 @@ def git_init_repo(root_dir):
 # 2) 변경사항 자동 커밋 및 푸시 함수 (push 전 원격 URL 재설정 포함)
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name, root_dir):
-    """파일 저장 후 자동 커밋 및 원격 푸시"""
+    """
+    파일 저장 후 자동 커밋 및 원격 푸시.
+    file_path : 저장 및 커밋할 파일의 전체 경로
+    team_name : 팀 이름 또는 커밋 메시지 구분 값
+    root_dir  : 해당 파일이 포함된 Git 저장소의 루트 디렉토리
+    """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
         repo = Repo(root_dir)
-        # 파일 경로를 상대경로로 변환
+        # 파일 경로를 루트 디렉토리 기준 상대 경로로 변환
         relative_path = os.path.relpath(file_path, root_dir)
         repo.index.add([relative_path])
         repo.index.commit(commit_message)
@@ -109,6 +114,7 @@ def git_auto_commit(file_path, team_name, root_dir):
         st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
+
 
 
 # -------------------------------------------------------------------
@@ -141,8 +147,8 @@ if 'git_initialized' not in st.session_state:
         git_init_repo(root_dir)
         try:
             repo = Repo(root_dir)
-            origin = repo.remote(name='origin')
-            origin.pull("main")
+            # --allow-unrelated-histories 옵션을 추가하여 병합
+            repo.git.pull('origin', 'main', '--allow-unrelated-histories')
             st.toast(f"{root_dir} GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
         except GitCommandError as e:
             st.error(f"Git 동기화 오류: {e}")
@@ -231,9 +237,12 @@ def save_and_reset():
                              st.session_state.new_memo_text.strip(),
                              author=st.session_state.author_name)
         st.session_state.new_memo_text = ""
+        # 메모 파일 저장 후 Git 커밋/푸시 (루트 디렉토리: memo_root_dir 사용)
+        git_auto_commit(memo_file_path, selected_team, memo_root_dir)
         st.toast("메모가 저장되었습니다!", icon="✅")
     else:
         st.toast("빈 메모는 저장할 수 없습니다!", icon="⚠️")
+
 
 st.sidebar.text_input("작성자 이름",
                       placeholder="작성자 이름을 입력하세요...",
@@ -302,10 +311,10 @@ if password:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
 
-                    # 파일 저장 및 Git 커밋/푸시
-                    df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
-                    git_auto_commit(schedules_file_path, selected_team)
-                    st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
+                        # 파일 저장 및 Git 커밋/푸시
+                        df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
+                        git_auto_commit(schedules_file_path, selected_team, schedules_root_dir)
+                        st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
                     git_pull_changes()
@@ -313,7 +322,7 @@ if password:
                 if os.path.exists(schedules_file_path):
                     try:
                         os.remove(schedules_file_path)
-                        git_auto_commit(schedules_file_path, "File Deletion")
+                        git_auto_commit(schedules_file_path, "File Deletion", schedules_root_dir)
                         st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
                     except Exception as delete_error:
                         st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
@@ -355,8 +364,9 @@ if password:
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
                     file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                     df.to_csv(file_path, index=False, encoding='utf-8-sig')
-                    git_auto_commit(file_path, selected_team)
+                    git_auto_commit(file_path, selected_team, model_example_root_dir)
                     st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
+
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
                     git_pull_changes()
@@ -365,7 +375,7 @@ if password:
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
-                        git_auto_commit(file_path, "File Deletion")
+                        git_auto_commit(file_path, "File Deletion", model_example_root_dir)
                         st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
                     except Exception as delete_error:
                         st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
@@ -631,9 +641,18 @@ def delete_memo_and_refresh(timestamp):
         with open(memo_file_path, "r", encoding="utf-8") as f:
             memos_list = json.load(f)
 
+        # 삭제 대상 메모를 제외한 메모 리스트 작성
         updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
+
+        # 변경된 메모 리스트를 파일에 저장
         with open(memo_file_path, "w", encoding="utf-8") as f:
             json.dump(updated_memos, f, ensure_ascii=False, indent=4)
+
+        try:
+            # 메모 파일 수정 내용을 Git에 커밋 및 푸시 (메모 루트 디렉토리 사용)
+            git_auto_commit(memo_file_path, f"{selected_team} Memo Deletion", memo_root_dir)
+        except GitCommandError as e:
+            st.error(f"Git 작업 오류: {e}")
 
         st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
         time.sleep(1)
