@@ -126,14 +126,36 @@ def git_auto_commit(file_path, team_name):
 # 3) 원격 저장소의 최신 변경사항 동기화 (pull)
 # -------------------------------------------------------------------
 def git_pull_changes():
-    """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
+    """원격 저장소의 최신 변경사항 동기화 (main 브랜치)
+    
+    동기화 도중 st.session_state.cancel_sync 플래그가 True인 경우 동기화를 중단합니다.
+    """
+    st.session_state.sync_active = True
+    st.session_state.cancel_sync = False  # 동기화 시작 시 취소 플래그 초기화
     try:
-        repo = Repo(repo_root)
-        origin = repo.remote(name='origin')
-        origin.pull("main")
-        #st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
-    except GitCommandError as e:
-        st.error(f"Git 동기화 오류: {e}")
+        process = subprocess.Popen(
+            ["git", "pull", "main"],
+            cwd=repo_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        # 동기화 진행 중 주기적으로 취소 여부 확인
+        while process.poll() is None:
+            if st.session_state.get("cancel_sync", False):
+                process.kill()
+                st.toast("동기화가 중단되었습니다.", icon="⛔")
+                return
+            time.sleep(0.1)
+        stdout, stderr = process.communicate()
+        if process.returncode != 0:
+            st.error(f"Git 동기화 오류: {stderr.decode()}")
+        else:
+            st.toast("GitHub 최신 데이터 동기화 완료!", icon="🔄")
+    except Exception as e:
+        st.error(f"동기화 중 오류 발생: {e}")
+    finally:
+        st.session_state.sync_active = False
+
 
 # -------------------------------------------------------------------
 # Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
@@ -239,6 +261,11 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
 
 def save_and_reset():
     if st.session_state.new_memo_text.strip():
+        # 만약 동기화 중이면 취소 플래그 설정
+        if st.session_state.get("sync_active", False):
+            st.session_state.cancel_sync = True
+            time.sleep(0.2)  # 동기화 종료를 위해 잠시 대기
+
         # GitHub 최신 데이터 동기화
         git_pull_changes()
         
@@ -257,13 +284,6 @@ def save_and_reset():
     else:
         st.toast("빈 메모는 저장할 수 없습니다!", icon="⚠️")
 
-st.sidebar.text_input("작성자 이름",
-                      placeholder="작성자 이름을 입력하세요...",
-                      key="author_name")
-st.sidebar.text_area("메모 내용",
-                     placeholder="여기에 메모를 입력하세요...",
-                     key="new_memo_text")
-st.sidebar.button("메모 저장", on_click=save_and_reset)
 
 # -------------------------------------------------------------------
 # 관리자 로그인 및 파일 업로드
@@ -301,10 +321,18 @@ if password:
             col1, col2 = st.sidebar.columns(2)
             with col1:
                 if st.button("⭕ 확 인 ⭕", key="confirm_schedule"):
+                    # 동기화 진행 중이면 취소 플래그 설정 후 잠시 대기
+                    if st.session_state.get("sync_active", False):
+                        st.session_state.cancel_sync = True
+                        time.sleep(0.2)
                     st.session_state.schedules_upload_confirmed = True
                     st.session_state.schedules_upload_canceled = False
             with col2:
                 if st.button("❌ 취 소 ❌", key="cancel_schedule"):
+                    # 동기화 진행 중이면 취소 플래그 설정 후 잠시 대기
+                    if st.session_state.get("sync_active", False):
+                        st.session_state.cancel_sync = True
+                        time.sleep(0.2)
                     st.session_state.schedules_upload_canceled = True
                     st.session_state.schedules_upload_confirmed = False
 
@@ -356,10 +384,18 @@ if password:
             col1, col2 = st.sidebar.columns(2)
             with col1:
                 if st.button("⭕ 확 인 ⭕", key="confirm_model_example"):
+                    # 동기화 진행 중이면 취소 플래그 설정 후 잠시 대기
+                    if st.session_state.get("sync_active", False):
+                        st.session_state.cancel_sync = True
+                        time.sleep(0.2)
                     st.session_state.model_example_upload_confirmed = True
                     st.session_state.model_example_upload_canceled = False
             with col2:
                 if st.button("❌ 취 소 ❌", key="cancel_model_example"):
+                    # 동기화 진행 중이면 취소 플래그 설정 후 잠시 대기
+                    if st.session_state.get("sync_active", False):
+                        st.session_state.cancel_sync = True
+                        time.sleep(0.2)
                     st.session_state.model_example_upload_canceled = True
                     st.session_state.model_example_upload_confirmed = False
 
@@ -676,18 +712,20 @@ def load_memos(memo_file_path):
 def delete_memo_and_refresh(timestamp):
     # 관리자 인증 체크: 관리자 로그인 상태가 아니라면 삭제 진행하지 않음.
     if not st.session_state.get("admin_authenticated", False):
-        #st.error("메모 삭제는 관리자 전용 기능입니다.")
         return
 
-    # 최신 GitHub 데이터를 반영합니다.
+    # 만약 동기화 중이면 취소 플래그 설정 (다른 동작이 시작되면 동기화를 중단)
+    if st.session_state.get("sync_active", False):
+        st.session_state.cancel_sync = True
+        time.sleep(0.2)  # 동기화 종료를 위해 잠시 대기
+
+    # 최신 GitHub 데이터를 반영
     git_pull_changes()
 
-    # 메모 파일이 존재하면 변경 내용을 반영합니다.
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "r", encoding="utf-8") as f:
             memos_list = json.load(f)
 
-        # 삭제할 타임스탬프를 가진 메모를 제외한 목록 생성
         updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
 
         if updated_memos:
@@ -696,7 +734,6 @@ def delete_memo_and_refresh(timestamp):
         else:
             os.remove(memo_file_path)
     
-    # Git 상태 반영 (존재 여부에 따라 add 또는 remove 수행)
     git_auto_commit(memo_file_path, selected_team)
 
     st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
