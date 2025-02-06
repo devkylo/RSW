@@ -12,29 +12,60 @@ from urllib.parse import unquote
 from cryptography.fernet import Fernet
 from git import Repo, GitCommandError
 
-# 한국 시간대 설정
+# -------------------------------------------------------------------
+# 기본 설정
+# -------------------------------------------------------------------
 korea_tz = pytz.timezone("Asia/Seoul")
 
-# 디렉토리 경로 설정
+# 디렉토리 경로
 schedules_root_dir = "team_schedules"
 model_example_root_dir = "team_model_example"
 today_schedules_root_dir = "team_today_schedules"
 memo_root_dir = "team_memo"
 
 # -------------------------------------------------------------------
-# 1) Git 저장소 초기화 및 원격 연결 (GitPython 사용)
+# 디렉토리 생성 함수
+# -------------------------------------------------------------------
+def create_dir_safe(path):
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+        st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
+
+# 필요한 모든 디렉토리 생성
+for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
+    create_dir_safe(folder)
+
+# -------------------------------------------------------------------
+# Personal Access Token(PAT) 포함 원격 URL 생성
+# -------------------------------------------------------------------
+def build_auth_repo_url():
+    """
+    st.secrets에 등록된 REPO_URL과 TOKEN을 이용하여, 토큰이 포함된 인증 URL을 생성합니다.
+    예: "https://github.com/devkylo/RSW.git" → "https://<TOKEN>@github.com/devkylo/RSW.git"
+    """
+    repo_url = st.secrets["GITHUB"]["REPO_URL"]
+    token = st.secrets["GITHUB"]["TOKEN"]
+    if token:
+        auth_repo_url = repo_url.replace("https://", f"https://{token}@")
+    else:
+        auth_repo_url = repo_url
+    return auth_repo_url
+
+# -------------------------------------------------------------------
+# 1) Git 저장소 초기화 및 원격 연결 (GitPython, PAT 적용)
 # -------------------------------------------------------------------
 def git_init_repo():
-    """Git 저장소 초기화 및 원격 연결"""
+    """Git 저장소 초기화 및 원격 연결 (PAT 적용)"""
     if not os.path.exists(schedules_root_dir):
         os.makedirs(schedules_root_dir, exist_ok=True)
     
     if not os.path.exists(os.path.join(schedules_root_dir, ".git")):
-        # 기본 브랜치를 "main"으로 명시하여 초기화
+        # 초기 브랜치를 "main"으로 지정하여 저장소 초기화
         repo = Repo.init(schedules_root_dir, initial_branch="main")
-        repo.create_remote('origin', st.secrets["GITHUB"]["REPO_URL"])
+        auth_repo_url = build_auth_repo_url()
+        repo.create_remote('origin', auth_repo_url)
         
-        # 사용자 이름과 이메일 설정
+        # 사용자 이름과 이메일 설정 (st.secrets 사용)
         with repo.config_writer() as config:
             config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
             config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
@@ -44,11 +75,11 @@ def git_init_repo():
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
         
-        # .gitignore 파일 커밋
+        # .gitignore 파일 스테이징 및 초기 커밋
         repo.index.add([gitignore_path])
         repo.index.commit("Initial commit with .gitignore")
         
-        # <--- 여기서 로컬 브랜치를 강제로 "main"으로 변경 (브랜치 일치)
+        # 로컬 브랜치를 강제로 "main"으로 변경하여 원격과 일치
         repo.git.branch("-M", "main")
         
         st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
@@ -57,50 +88,48 @@ def git_init_repo():
 # 2) 변경사항 자동 커밋 및 푸시 함수
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
-    """변경사항 자동 커밋 및 푸시"""
+    """
+    파일 저장 후 자동 커밋 및 원격 푸시 (현재 HEAD 기준으로 main 브랜치에 푸시)
+    """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
         repo = Repo(schedules_root_dir)
         relative_path = os.path.relpath(file_path, schedules_root_dir)
         repo.index.add([relative_path])
         repo.index.commit(commit_message)
+        # 로컬 브랜치를 강제로 "main"으로 변경
+        repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        origin.push(refspec='main:main')  # main 브랜치 기준
+        # HEAD 기준으로 원격 main 브랜치에 push
+        origin.push("HEAD:refs/heads/main")
         st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
 
+# -------------------------------------------------------------------
+# 3) 원격 저장소와 동기화 (pull)
+# -------------------------------------------------------------------
 def git_pull_changes():
-    """원격 저장소의 최신 변경사항 동기화 (명시적으로 main 브랜치 지정)"""
+    """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
     try:
         repo = Repo(schedules_root_dir)
         origin = repo.remote(name='origin')
-        # 명시적으로 'main' 브랜치에서 변경사항을 pull
         origin.pull("main")
         st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
     except GitCommandError as e:
         st.error(f"Git 동기화 오류: {e}")
 
 # -------------------------------------------------------------------
-# 3) 디렉토리 생성 로직
+# Git 초기화 및 동기화 (세션 상태에서 한 번만 실행)
 # -------------------------------------------------------------------
-def create_dir_safe(path):
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
-        st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
-
-for d in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
-    create_dir_safe(d)
-
-# Git 저장소 초기화 및 동기화
 if 'git_initialized' not in st.session_state:
     git_init_repo()
     git_pull_changes()
     st.session_state.git_initialized = True
 
-# ------------------------------------------------------------------------------
-# Streamlit UI
-# ------------------------------------------------------------------------------
+# -------------------------------------------------------------------
+# Streamlit UI - 팀, 월, 메모, 파일 업로드 등
+# -------------------------------------------------------------------
 st.title("Rotation Scheduler WebService 💻")
 
 # 팀 및 월 선택
@@ -137,7 +166,9 @@ schedules_file_path = os.path.join(schedules_folder_path, f"{current_year}_{sele
 model_example_file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
 memo_file_path = os.path.join(memo_team_folder_path, f"{current_year}_{selected_month}_memos.json")
 
-# ---------- 메모 관련 함수 및 UI ----------
+# -------------------------------------------------------------------
+# 메모 관련 함수 및 UI
+# -------------------------------------------------------------------
 st.sidebar.title("메모 추가 ✏️")
 
 if 'new_memo_text' not in st.session_state:
@@ -190,7 +221,9 @@ st.sidebar.text_area("메모 내용",
                      key="new_memo_text")
 st.sidebar.button("메모 저장", on_click=save_and_reset)
 
-# ---------- 관리자 로그인 및 파일 업로드 ----------
+# -------------------------------------------------------------------
+# 관리자 로그인 및 파일 업로드
+# -------------------------------------------------------------------
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
 
@@ -208,7 +241,7 @@ if "model_example_upload_canceled" not in st.session_state:
     st.session_state.model_example_upload_canceled = False
 
 if password:
-    # st.secrets의 teams 섹션에 등록된 비밀번호 이용
+    # st.secrets의 teams 섹션에 등록된 비밀번호 사용
     correct_password = st.secrets["teams"].get(selected_team)
     if password == correct_password:
         st.session_state.admin_authenticated = True
@@ -258,7 +291,6 @@ if password:
                 if os.path.exists(schedules_file_path):
                     try:
                         os.remove(schedules_file_path)
-                        # 삭제 시 실제 변경된 파일 경로를 지정하는 것이 좋습니다.
                         git_auto_commit(schedules_file_path, "File Deletion")
                         st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
                     except Exception as delete_error:
@@ -299,7 +331,6 @@ if password:
                             except Exception:
                                 uploaded_model_example_file.seek(0)
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
-
                     file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                     df.to_csv(file_path, index=False, encoding='utf-8-sig')
                     git_auto_commit(file_path, selected_team)
