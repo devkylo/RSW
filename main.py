@@ -674,6 +674,11 @@ def load_memos(memo_file_path):
 
 
 def delete_memo_and_refresh(timestamp):
+    # 관리자 인증 체크: 관리자 로그인 상태가 아니라면 삭제 진행하지 않음.
+    if not st.session_state.get("admin_authenticated", False):
+        #st.error("메모 삭제는 관리자 전용 기능입니다.")
+        return
+
     # 최신 GitHub 데이터를 반영합니다.
     git_pull_changes()
 
@@ -686,15 +691,12 @@ def delete_memo_and_refresh(timestamp):
         updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
 
         if updated_memos:
-            # 메모 목록이 남아 있으면 파일을 업데이트
             with open(memo_file_path, "w", encoding="utf-8") as f:
                 json.dump(updated_memos, f, ensure_ascii=False, indent=4)
         else:
-            # 메모가 모두 삭제되면 파일 자체를 제거
             os.remove(memo_file_path)
-
-    # 파일이 존재하든 없든, git_auto_commit에서 파일 존재 여부를 확인하여
-    # 존재하면 add, 없으면 remove하여 삭제 상태를 반영합니다.
+    
+    # Git 상태 반영 (존재 여부에 따라 add 또는 remove 수행)
     git_auto_commit(memo_file_path, selected_team)
 
     st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
@@ -713,13 +715,17 @@ if memos_list:
         memo_content = memo["note"].replace("\n", "  \n")
         st.markdown(memo_content)
         st.write("🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺")
-
-        if st.button(
-            f"🙋 삭제는 관리자에게 문의 부탁드립니다!🗑️ ◽작성자 : **{memo['author']}** ◽작성시간 : ({formatted_timestamp})",
-            key=f"delete_{formatted_timestamp}_{idx}",
-            disabled=not st.session_state.admin_authenticated
-        ):
-            delete_memo_and_refresh(memo['timestamp'])
+        
+        # 관리자 로그인 상태일 경우에만 삭제 버튼 활성화
+        if st.session_state.get("admin_authenticated", False):
+            if st.button(
+                f"🙋 메모 삭제 🗑️ (작성자: {memo['author']} / 작성시간: {formatted_timestamp})",
+                key=f"delete_{formatted_timestamp}_{idx}"
+            ):
+                delete_memo_and_refresh(memo['timestamp'])
+        else:
+            st.info("관리자 로그인 시 메모 삭제가 가능합니다.")
+        
         st.markdown("---")
 else:
     st.info(f"{selected_team}의 {selected_month}에 저장된 메모가 없습니다.")
