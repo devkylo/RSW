@@ -24,6 +24,30 @@ today_schedules_root_dir = "team_today_schedules"
 memo_root_dir = "team_memo"
 
 # -------------------------------------------------------------------
+# 팀 목록 및 디렉토리 생성
+# -------------------------------------------------------------------
+# 팀 목록 정의
+teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안SO팀", "성수SO팀", "중부SO팀"]
+
+# 각 루트 디렉토리에 대해 모든 팀 폴더 생성
+def create_team_directories():
+    root_dirs = [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]
+    
+    for root_dir in root_dirs:
+        # 루트 디렉토리 생성
+        create_dir_safe(root_dir)
+        
+        # 각 팀별 하위 디렉토리 생성
+        for team in teams:
+            team_dir = os.path.join(root_dir, team)
+            create_dir_safe(team_dir)
+
+# Git 초기화 및 동기화 전에 디렉토리 생성 함수 호출
+if 'directories_initialized' not in st.session_state:
+    create_team_directories()
+    st.session_state.directories_initialized = True
+    
+# -------------------------------------------------------------------
 # 디렉토리 생성 함수: 파일 경로가 없으면 생성
 # -------------------------------------------------------------------
 def create_dir_safe(path):
@@ -53,62 +77,46 @@ def build_auth_repo_url():
     return auth_repo_url
 
 # -------------------------------------------------------------------
-# 디렉토리 생성 함수: 파일 경로가 없으면 생성하고 .gitkeep 파일 추가
-# -------------------------------------------------------------------
-def create_dir_safe(path):
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
-        # 빈 디렉토리를 git에서 추적하기 위한 .gitkeep 파일 생성
-        gitkeep_path = os.path.join(path, '.gitkeep')
-        with open(gitkeep_path, 'w') as f:
-            pass  # 빈 파일 생성
-        st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
-        return gitkeep_path
-    return None
-
-# 필요한 모든 디렉토리 생성 및 .gitkeep 파일 추가
-gitkeep_files = []
-for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
-    gitkeep_path = create_dir_safe(folder)
-    if gitkeep_path:
-        gitkeep_files.append(gitkeep_path)
-
-# -------------------------------------------------------------------
-# Git 저장소 초기화 함수 수정
+# 1) Git 저장소 초기화 및 원격 연결 (GitPython, PAT 적용)
 # -------------------------------------------------------------------
 def git_init_repo():
     """Git 저장소 초기화 및 원격 연결 (PAT 적용)"""
-    if not os.path.exists(schedules_root_dir):
-        os.makedirs(schedules_root_dir, exist_ok=True)
+    root_dirs = [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]
     
-    if not os.path.exists(os.path.join(schedules_root_dir, ".git")):
-        # 초기 브랜치를 "main"으로 지정하여 저장소 초기화
-        repo = Repo.init(schedules_root_dir, initial_branch="main")
-        auth_repo_url = build_auth_repo_url()
-        repo.create_remote('origin', auth_repo_url)
+    for root_dir in root_dirs:
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir, exist_ok=True)
         
-        # 사용자 이름과 이메일 설정
-        with repo.config_writer() as config:
-            config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
-            config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
-        
-        # .gitignore 생성 (임시 파일만 제외)
-        gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
-        with open(gitignore_path, "w") as f:
-            f.write("*.tmp\n")  # 임시 파일만 제외
-        
-        # .gitignore 파일과 .gitkeep 파일들을 스테이징
-        repo.index.add([gitignore_path])
-        for gitkeep_path in gitkeep_files:
-            if os.path.exists(gitkeep_path):
-                relative_path = os.path.relpath(gitkeep_path, schedules_root_dir)
-                repo.index.add([relative_path])
-        
-        # 초기 커밋
-        repo.index.commit("Initial commit with directory structure")
-        
-        # 로컬 브랜치를 강제로 "main"으로 변경
-        repo.git.branch("-M", "main")
+        # .git 폴더가 없으면 초기화 진행
+        if not os.path.exists(os.path.join(root_dir, ".git")):
+            # 초기 브랜치를 "main"으로 지정하여 저장소 초기화
+            repo = Repo.init(root_dir, initial_branch="main")
+            # 토큰을 포함한 인증 URL 사용
+            auth_repo_url = build_auth_repo_url()
+            repo.create_remote('origin', auth_repo_url)
+            
+            # 사용자 이름과 이메일 설정
+            with repo.config_writer() as config:
+                config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
+                config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
+            
+            # .gitignore 파일 생성
+            gitignore_path = os.path.join(root_dir, ".gitignore")
+            with open(gitignore_path, "w") as f:
+                f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
+            
+            # 모든 팀 디렉토리를 Git에 추가
+            for team in teams:
+                team_dir = os.path.join(root_dir, team)
+                if os.path.exists(team_dir):
+                    repo.index.add([team_dir])
+            
+            # .gitignore 추가 및 초기 커밋
+            repo.index.add([gitignore_path])
+            repo.index.commit(f"Initial commit with team directories for {root_dir}")
+            
+            # 로컬 브랜치를 main으로 설정
+            repo.git.branch("-M", "main")
         
         st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
 
