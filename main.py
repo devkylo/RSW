@@ -120,7 +120,8 @@ def git_init_repo():
                     repo.index.add([rel_placeholder])
 
             # .gitignore 추가 및 초기 커밋
-            repo.index.add([gitignore_path])
+            rel_gitignore = os.path.relpath(gitignore_path, root_dir)
+            repo.index.add([rel_gitignore])
             repo.index.commit(f"Initial commit with team directories for {root_dir}")
 
             # 로컬 브랜치를 main으로 설정
