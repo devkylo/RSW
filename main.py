@@ -13,29 +13,8 @@ from cryptography.fernet import Fernet
 from git import Repo, GitCommandError
 import subprocess
 
+
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
-
-# 전역 알림 배너 표시: Git 연동 작업이 진행 중이면 상단에 고정 배너 추가
-if st.session_state.get("git_integration_running", False):
-    st.markdown(
-        """
-        <div style="
-            position: fixed;
-            top: 0;
-            width: 100%;
-            background-color: #ffcc00;
-            color: #000;
-            padding: 10px;
-            text-align: center;
-            z-index: 9999;
-            font-weight: bold;
-        ">
-            현재 Git 연동 작업이 진행 중입니다. 다른 작업은 일시적으로 비활성화됩니다.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
 # -------------------------------------------------------------------
 # Git 사용자 정보 강제 재설정 함수
 # -------------------------------------------------------------------
@@ -164,9 +143,6 @@ if 'git_initialized' not in st.session_state:
     git_init_repo()
     git_pull_changes()
     st.session_state.git_initialized = True
-
-if "git_integration_running" not in st.session_state:
-    st.session_state.git_integration_running = False
 
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
