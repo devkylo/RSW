@@ -11,6 +11,8 @@ from collections import defaultdict
 from urllib.parse import unquote
 from git import Repo, GitCommandError
 import subprocess
+from git.exc import InvalidGitRepositoryError
+
 
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
@@ -110,18 +112,28 @@ def git_auto_commit_submodule(file_path, team_name):
 # [2] 서브모듈별 원격 저장소의 최신 변경사항 동기화 (pull)
 # -------------------------------------------------------------------
 def git_pull_submodule(submodule_folder):
+    # 폴더 존재 여부 확인
+    if not os.path.isdir(submodule_folder):
+        print(f"Git 서브모듈 폴더 '{submodule_folder}'가 존재하지 않습니다.")
+        return None
+
+    # 유효한 Git 저장소인지 확인 (상위 디렉토리까지 검색)
     try:
-        # 서브모듈 초기화 및 동기화
-        subprocess.run(['git', 'submodule', 'init'], check=True)
-        subprocess.run(['git', 'submodule', 'update', '--remote', '--recursive'], check=True)
-
-        # 지정된 서브모듈 폴더에서 최신 변경사항 가져오기
-        repo = Repo(submodule_folder)
-        origin = repo.remote(name='origin')
-        origin.pull("main")
-    except GitCommandError as e:
-        st.error(f"서브모듈 '{submodule_folder}' Git 동기화 오류: {e}")
-
+        repo = Repo(submodule_folder, search_parent_directories=True)
+    except InvalidGitRepositoryError:
+        print(f"폴더 '{submodule_folder}'는 유효한 Git 저장소가 아닙니다. 새 저장소를 초기화합니다.")
+        repo = Repo.init(submodule_folder)
+    
+    # 원격 저장소가 설정되어 있다면 pull 시도
+    try:
+        if repo.remotes:
+            print("Git pull 실행 중...")
+            repo.remotes.origin.pull()
+        else:
+            print("원격 저장소가 설정되어 있지 않습니다.")
+    except Exception as e:
+        print("Git pull 중 오류 발생:", e)
+    return repo
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
 # -------------------------------------------------------------------
