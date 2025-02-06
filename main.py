@@ -719,12 +719,12 @@ if memos_list:
         # 관리자 로그인 상태일 경우에만 삭제 버튼 활성화
         if st.session_state.get("admin_authenticated", False):
             if st.button(
-                f"🙋 메모 삭제 🗑️ (작성자: {memo['author']} / 작성시간: {formatted_timestamp})",
+                f"❌ 메모 삭제 ❌ (작성자: {memo['author']} / 작성 시간: {formatted_timestamp})",
                 key=f"delete_{formatted_timestamp}_{idx}"
             ):
                 delete_memo_and_refresh(memo['timestamp'])
         else:
-            st.info("관리자 로그인 시 메모 삭제가 가능합니다.")
+            st.info("🙋 삭제는 관리자에게 문의 부탁드립니다!🗑️")
         
         st.markdown("---")
 else:
