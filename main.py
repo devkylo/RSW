@@ -51,7 +51,6 @@ submodule_dirs = [
 def create_dir_safe(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-        # 비어 있는 폴더도 Git에 반영되도록 .gitkeep 파일 생성
         gitkeep_path = os.path.join(path, ".gitkeep")
         with open(gitkeep_path, "w") as f:
             f.write("")
