@@ -48,6 +48,9 @@ def git_init_repo():
         repo.index.add([gitignore_path])
         repo.index.commit("Initial commit with .gitignore")
         
+        # <--- 여기서 로컬 브랜치를 강제로 "main"으로 변경 (브랜치 일치)
+        repo.git.branch("-M", "main")
+        
         st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
 
 # -------------------------------------------------------------------
