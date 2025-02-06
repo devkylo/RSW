@@ -29,120 +29,95 @@ reset_git_config()
 repo_root = "."  # 저장소 루트 (프로젝트 루트)
 korea_tz = pytz.timezone("Asia/Seoul")
 
-# 디렉토리 경로 설정
-schedules_root_dir = "team_schedules"
-model_example_root_dir = "team_model_example"
+# -------------------------------------------------------------------
+# 서브모듈 디렉토리 경로 설정 (각 폴더는 개별 서브모듈로 관리됨)
+# -------------------------------------------------------------------
+schedules_root_dir       = "team_schedules"
+model_example_root_dir   = "team_model_example"
 today_schedules_root_dir = "team_today_schedules"
-memo_root_dir = "team_memo"
+memo_root_dir            = "team_memo"
+
+submodule_dirs = [
+    schedules_root_dir,
+    model_example_root_dir,
+    today_schedules_root_dir,
+    memo_root_dir
+]
 
 # -------------------------------------------------------------------
-# 디렉토리 생성 함수: 파일 경로가 없으면 생성
+# 디렉토리 생성: 서브모듈 폴더가 없을 경우 생성(서브모듈은 별도의 저장소이므로)
 # -------------------------------------------------------------------
 def create_dir_safe(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-        # 빈 폴더도 Git에 반영되도록 .gitkeep 파일 생성
+        # 비어 있는 폴더도 Git에 반영되도록 .gitkeep 파일 생성
         gitkeep_path = os.path.join(path, ".gitkeep")
         with open(gitkeep_path, "w") as f:
             f.write("")
 
-for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
+for folder in submodule_dirs:
     create_dir_safe(folder)
 
 # -------------------------------------------------------------------
-# Personal Access Token(PAT)가 포함된 인증 URL 생성 함수
+# GITHUB 인증 URL 생성 함수  
+# (각 서브모듈은 독립된 URL을 가져야 하므로 st.secrets에 등록되어 있어야 함)
 # -------------------------------------------------------------------
-def build_auth_repo_url():
-    """
-    st.secrets에 등록된 REPO_URL과 TOKEN을 이용하여,
-    토큰이 포함된 인증 URL을 생성합니다.
-    예: "https://github.com/devkylo/RSW.git" → "https://<TOKEN>:x-oauth-basic@github.com/devkylo/RSW.git"
-    """
-    repo_url = st.secrets["GITHUB"]["REPO_URL"]
+def build_auth_repo_url(repo_url):
     token = st.secrets["GITHUB"]["TOKEN"]
     if token:
-        auth_repo_url = repo_url.replace("https://", f"https://{token}:x-oauth-basic@")
+        return repo_url.replace("https://", f"https://{token}:x-oauth-basic@")
     else:
-        auth_repo_url = repo_url
-    return auth_repo_url
+        return repo_url
 
+# 각 서브모듈별 원격 저장소 URL 매핑 (st.secrets에 미리 등록)
+repo_url_mapping = st.secrets["GITHUB"].get("REPO_URL_MAPPING", {
+    schedules_root_dir:       st.secrets["GITHUB"]["REPO_URL_SCHEDULES"],
+    model_example_root_dir:   st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"],
+    today_schedules_root_dir: st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"],
+    memo_root_dir:            st.secrets["GITHUB"]["REPO_URL_MEMO"],
+})
 # -------------------------------------------------------------------
-# 1) Git 저장소 초기화 및 원격 연결 (GitPython, PAT 적용)
+# [1] 서브모듈별 Git 자동 커밋 및 푸시 함수
 # -------------------------------------------------------------------
-def git_init_repo():
-    """Git 저장소 초기화 및 원격 연결 (PAT 적용)"""
-    # 필수 폴더들 생성 (team_schedules, model_example 등)
-    for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
-        create_dir_safe(folder)
-    
-    # repo_root 경로에 .git 폴더가 없으면 저장소 초기화
-    if not os.path.exists(os.path.join(repo_root, ".git")):
-        repo = Repo.init(repo_root, initial_branch="main")
-        auth_repo_url = build_auth_repo_url()
-        repo.create_remote('origin', auth_repo_url)
-        
-        with repo.config_writer() as config:
-            config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
-            config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
-        
-        # .gitignore 생성 - Git에 포함하지 않을 폴더만 지정 (team_schedules는 커밋)
-        gitignore_path = os.path.join(repo_root, ".gitignore")
-        with open(gitignore_path, "w") as f:
-            f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
-        
-        repo.index.add([gitignore_path])
-        repo.index.commit("Initial commit with .gitignore")
-        repo.git.branch("-M", "main")
-        
-        #st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
+def git_auto_commit_submodule(file_path, team_name):
+    # 파일이 속한 서브모듈 폴더 확인 (네 폴더 중 어느 곳에 있는지)
+    file_path_abs = os.path.abspath(file_path)
+    submodule_folder = None
+    for folder in submodule_dirs:
+        if file_path_abs.startswith(os.path.abspath(folder)):
+            submodule_folder = folder
+            break
+    if not submodule_folder:
+        st.error("해당 파일은 어떤 서브모듈에도 속하지 않습니다.")
+        return
 
-# -------------------------------------------------------------------
-# 2) 변경사항 자동 커밋 및 푸시 함수 (push 전 원격 URL 재설정 포함)
-# -------------------------------------------------------------------
-def git_auto_commit(file_path, team_name):
-    """
-    파일 저장 후 자동 커밋 및 원격 푸시 (파일이 존재하면 add, 없으면 remove하여 삭제를 반영)
-    """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        repo = Repo(repo_root)  # repo_root 기준으로 작업
-        # file_path를 repo_root 기준 상대경로로 변환
-        relative_path = os.path.relpath(file_path, repo_root)
-        # 파일이 존재하면 추가, 존재하지 않으면 삭제 상태를 인덱스에 반영
+        repo = Repo(submodule_folder)
+        # 파일 경로를 서브모듈 기준 상대경로로 변환
+        relative_path = os.path.relpath(file_path, os.path.abspath(submodule_folder))
         if os.path.exists(file_path):
             repo.index.add([relative_path])
         else:
             repo.index.remove([relative_path])
         repo.index.commit(commit_message)
-        repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        # 최신 PAT가 포함된 URL로 재설정 후 push
-        origin.set_url(build_auth_repo_url())
+        auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
+        origin.set_url(auth_url)
         origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
-        st.error(f"Git 작업 오류: {e}")
-
+        st.error(f"서브모듈 '{submodule_folder}' Git 작업 오류: {e}")
 
 # -------------------------------------------------------------------
-# 3) 원격 저장소의 최신 변경사항 동기화 (pull)
+# [2] 서브모듈별 원격 저장소의 최신 변경사항 동기화 (pull)
 # -------------------------------------------------------------------
-def git_pull_changes():
-    """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
+def git_pull_submodule(submodule_folder):
     try:
-        repo = Repo(repo_root)
+        repo = Repo(submodule_folder)
         origin = repo.remote(name='origin')
         origin.pull("main")
-        #st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
     except GitCommandError as e:
-        st.error(f"Git 동기화 오류: {e}")
-
-# -------------------------------------------------------------------
-# Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
-# -------------------------------------------------------------------
-if 'git_initialized' not in st.session_state:
-    git_init_repo()
-    git_pull_changes()
-    st.session_state.git_initialized = True
+        st.error(f"서브모듈 '{submodule_folder}' Git 동기화 오류: {e}")
 
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
@@ -240,17 +215,15 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
 
 def save_and_reset():
     if st.session_state.new_memo_text.strip():
-        # GitHub 최신 데이터 동기화
-        git_pull_changes()
+        # memo_root_dir에 한하여 pull 수행
+        git_pull_submodule(memo_root_dir)
         
-        # 메모 저장 시도
         if save_memo_with_reset(memo_file_path,
-                              st.session_state.new_memo_text.strip(),
-                              author=st.session_state.author_name):
-                              
+                                  st.session_state.new_memo_text.strip(),
+                                  author=st.session_state.author_name):
             try:
-                # Git에 변경사항 커밋 및 푸시
-                git_auto_commit(memo_file_path, selected_team)
+                # memo 파일에 대해서만 서브모듈 Git commit/push 수행
+                git_auto_commit_submodule(memo_file_path, selected_team)
                 st.session_state.new_memo_text = ""
                 st.toast("메모가 저장되었습니다!", icon="✅")
             except Exception as e:
@@ -327,23 +300,23 @@ if password:
 
                     # 파일 저장 및 Git 커밋/푸시
                     df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
-                    git_auto_commit(schedules_file_path, selected_team)
+                    git_auto_commit_submodule(schedules_file_path, selected_team)
                     st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-                    git_pull_changes()
+                    git_pull_submodule(schedules_root_dir)
             elif st.session_state.schedules_upload_canceled:
-                file_path = os.path.join(schedules_file_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+                file_path = schedules_file_path
                 try:
                     # 파일이 있으면 삭제; 없으면 그냥 넘어감
                     if os.path.exists(file_path):
                         os.remove(file_path)
                     # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
-                    git_auto_commit(file_path, selected_team)
-                    st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
+                    git_auto_commit_submodule(file_path, selected_team)
+                    st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                    git_pull_changes()
+                    git_pull_submodule(schedules_root_dir)
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
@@ -381,11 +354,11 @@ if password:
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
                     file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                     df.to_csv(file_path, index=False, encoding='utf-8-sig')
-                    git_auto_commit(file_path, selected_team)
+                    git_auto_commit_submodule(file_path, selected_team)
                     st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-                    git_pull_changes()
+                    git_pull_submodule(model_example_root_dir)
             elif st.session_state.model_example_upload_canceled:
                 file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                 try:
@@ -393,11 +366,11 @@ if password:
                     if os.path.exists(file_path):
                         os.remove(file_path)
                     # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
-                    git_auto_commit(file_path, selected_team)
+                    git_auto_commit_submodule(file_path, selected_team)
                     st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                    git_pull_changes()
+                    git_pull_submodule(model_example_root_dir)
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
     else:
@@ -558,9 +531,9 @@ try:
                 created_files.append(json_file_path)
             
             # GitHub와 동기화: 원격 변경사항을 pull한 후 생성된 파일들을 개별 커밋 및 푸시
-            git_pull_changes()
+            git_pull_submodule(today_schedules_root_dir)
             for file_path in created_files:
-                git_auto_commit(file_path, selected_team)
+                git_auto_commit_submodule(file_path, selected_team)
 
         # 함수 실행 예시
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
@@ -673,33 +646,23 @@ def load_memos(memo_file_path):
                 return []
     return []
 
-
 def delete_memo_and_refresh(timestamp):
-    # 관리자 인증 체크: 관리자 로그인 상태가 아니라면 삭제 진행하지 않음.
     if not st.session_state.get("admin_authenticated", False):
-        #st.error("메모 삭제는 관리자 전용 기능입니다.")
         return
 
-    # 최신 GitHub 데이터를 반영합니다.
-    git_pull_changes()
+    git_pull_submodule(memo_root_dir)
 
-    # 메모 파일이 존재하면 변경 내용을 반영합니다.
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "r", encoding="utf-8") as f:
             memos_list = json.load(f)
-
-        # 삭제할 타임스탬프를 가진 메모를 제외한 목록 생성
         updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
-
         if updated_memos:
             with open(memo_file_path, "w", encoding="utf-8") as f:
                 json.dump(updated_memos, f, ensure_ascii=False, indent=4)
         else:
             os.remove(memo_file_path)
     
-    # Git 상태 반영 (존재 여부에 따라 add 또는 remove 수행)
-    git_auto_commit(memo_file_path, selected_team)
-
+    git_auto_commit_submodule(memo_file_path, selected_team)
     st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
     time.sleep(1)
     st.rerun()
