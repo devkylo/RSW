@@ -11,7 +11,6 @@ from collections import defaultdict
 from urllib.parse import unquote
 from git import Repo, GitCommandError
 import subprocess
-from git.exc import InvalidGitRepositoryError
 
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
@@ -112,24 +111,13 @@ def git_auto_commit_submodule(file_path, team_name):
 # [2] 서브모듈별 원격 저장소의 최신 변경사항 동기화 (pull)
 # -------------------------------------------------------------------
 def git_pull_submodule(submodule_folder):
-    # 서브모듈 폴더가 Git 저장소로 초기화되어 있지 않은 경우를 처리
     try:
         repo = Repo(submodule_folder)
-    except InvalidGitRepositoryError:
-        st.info(f"서브모듈 '{submodule_folder}'가 초기화되지 않았습니다. 원격 저장소에서 클론을 시도합니다.")
-        auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
-        try:
-            repo = Repo.clone_from(auth_url, submodule_folder)
-            st.success(f"서브모듈 '{submodule_folder}' 클론 완료.")
-        except Exception as clone_error:
-            st.error(f"서브모듈 '{submodule_folder}' 클론 중 오류 발생: {clone_error}")
-            return
-
-    try:
         origin = repo.remote(name='origin')
         origin.pull("main")
     except GitCommandError as e:
         st.error(f"서브모듈 '{submodule_folder}' Git 동기화 오류: {e}")
+
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
 # -------------------------------------------------------------------
