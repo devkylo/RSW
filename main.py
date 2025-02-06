@@ -110,12 +110,14 @@ def git_init_repo():
             with open(gitignore_path, "w") as f:
                 f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
 
-            # 모든 팀 디렉토리의 placeholder 파일(.gitkeep)을 Git에 추가
+            # 모든 팀 디렉토리의 placeholder 파일(.gitkeep)을 Git에 추가 (상대 경로 사용)
             for team in teams:
                 team_dir = os.path.join(root_dir, team)
                 placeholder_file = os.path.join(team_dir, ".gitkeep")
                 if os.path.exists(placeholder_file):
-                    repo.index.add([placeholder_file])
+                    # Git 저장소 기준 상대 경로로 변환
+                    rel_placeholder = os.path.relpath(placeholder_file, root_dir)
+                    repo.index.add([rel_placeholder])
 
             # .gitignore 추가 및 초기 커밋
             repo.index.add([gitignore_path])
