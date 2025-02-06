@@ -47,7 +47,7 @@ submodule_dirs = [
 ]
 
 # -------------------------------------------------------------------
-# 디렉토리 생성 함수: 해당 폴더가 없으면 생성 (서브 저장소는 별도 폴더)
+# 디렉토리 생성 함수: 지정한 경로가 없으면 디렉토리(및 .gitkeep 파일) 생성
 # -------------------------------------------------------------------
 def create_dir_safe(path):
     if not os.path.exists(path):
@@ -56,12 +56,12 @@ def create_dir_safe(path):
         with open(gitkeep_path, "w") as f:
             f.write("")
 
+# 기본 서브모듈 폴더부터 생성
 for folder in submodule_dirs:
     create_dir_safe(folder)
 
 # -------------------------------------------------------------------
-# GITHUB 인증 URL 생성 함수  
-# (각 서브모듈은 독립된 URL을 가져야 하므로 st.secrets에 등록되어 있어야 함)
+# GitHub 인증 URL 생성 함수
 # -------------------------------------------------------------------
 def build_auth_repo_url(repo_url):
     token = st.secrets["GITHUB"]["TOKEN"]
@@ -70,7 +70,7 @@ def build_auth_repo_url(repo_url):
     else:
         return repo_url
 
-# 각 서브모듈별 원격 저장소 URL 매핑 (st.secrets에 미리 등록)
+# 각 서브모듈별 원격 저장소 URL 매핑 (st.secrets에 등록되어 있어야 함)
 repo_url_mapping = st.secrets["GITHUB"].get("REPO_URL_MAPPING", {
     schedules_root_dir:       st.secrets["GITHUB"]["REPO_URL_SCHEDULES"],
     model_example_root_dir:   st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"],
@@ -78,12 +78,12 @@ repo_url_mapping = st.secrets["GITHUB"].get("REPO_URL_MAPPING", {
     memo_root_dir:            st.secrets["GITHUB"]["REPO_URL_MEMO"],
 })
 # -------------------------------------------------------------------
-# [1] 서브 저장소별 Git 자동 커밋 및 푸시 함수 (수정됨)
+# [1] 서브 저장소별 Git 자동 커밋 및 푸시 함수 (파일이 존재하지 않을 경우 remove 처리)
 # -------------------------------------------------------------------
 def git_auto_commit_submodule(file_path, team_name):
     file_path_abs = os.path.abspath(file_path)
     submodule_folder = None
-    # 각 submodule 폴더(절대경로) 내 포함 여부 체크
+    # 서브모듈 폴더(절대경로) 내부에 파일이 포함되는지 확인
     for folder in submodule_dirs:
         folder_abs = os.path.abspath(folder)
         if file_path_abs.startswith(folder_abs):
@@ -113,26 +113,26 @@ def git_auto_commit_submodule(file_path, team_name):
         st.error(f"서브 저장소 '{submodule_folder}' Git 작업 오류: {e}")
 
 # -------------------------------------------------------------------
-# [2] 서브 저장소별 원격 변경사항 동기화 (pull)
+# [2] 서브 저장소별 원격 동기화(pull) 함수
 # -------------------------------------------------------------------
 def git_pull_submodule(submodule_folder):
-    if not os.path.isdir(submodule_folder):
-        print(f"Git 서브 저장소 폴더 '{submodule_folder}'가 존재하지 않습니다.")
-        return None
+    # 서브모듈 폴더가 Git 저장소로 초기화되어 있지 않은 경우를 처리
     try:
-        repo = Repo(submodule_folder, search_parent_directories=True)
+        repo = Repo(submodule_folder)
     except InvalidGitRepositoryError:
-        print(f"폴더 '{submodule_folder}'는 유효한 Git 저장소가 아닙니다. 새 저장소를 초기화합니다.")
-        repo = Repo.init(submodule_folder)
+        st.info(f"서브모듈 '{submodule_folder}'가 초기화되지 않았습니다. 원격 저장소에서 클론을 시도합니다.")
+        auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
+        try:
+            repo = Repo.clone_from(auth_url, submodule_folder)
+            st.success(f"서브모듈 '{submodule_folder}' 클론 완료.")
+        except Exception as clone_error:
+            st.error(f"서브모듈 '{submodule_folder}' 클론 중 오류 발생: {clone_error}")
+            return
     try:
-        if repo.remotes:
-            print("Git pull 실행 중...")
-            repo.remotes.origin.pull()
-        else:
-            print("원격 저장소가 설정되어 있지 않습니다.")
-    except Exception as e:
-        print("Git pull 중 오류 발생:", e)
-    return repo
+        origin = repo.remote(name='origin')
+        origin.pull("main")
+    except GitCommandError as e:
+        st.error(f"서브모듈 '{submodule_folder}' Git 동기화 오류: {e}")
 
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
