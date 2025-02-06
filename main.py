@@ -317,7 +317,7 @@ if password:
                         st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-                    git_pull_changes()
+                    git_pull_changes(schedules_root_dir)
             elif st.session_state.schedules_upload_canceled:
                 if os.path.exists(schedules_file_path):
                     try:
@@ -326,7 +326,7 @@ if password:
                         st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
                     except Exception as delete_error:
                         st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                        git_pull_changes()
+                        git_pull_changes(schedules_root_dir)
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
@@ -369,7 +369,7 @@ if password:
 
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-                    git_pull_changes()
+                    git_pull_changes(model_example_root_dir)
             elif st.session_state.model_example_upload_canceled:
                 file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                 if os.path.exists(file_path):
@@ -379,7 +379,7 @@ if password:
                         st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
                     except Exception as delete_error:
                         st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                        git_pull_changes()
+                        git_pull_changes(model_example_root_dir)
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
     else:
@@ -649,10 +649,11 @@ def delete_memo_and_refresh(timestamp):
             json.dump(updated_memos, f, ensure_ascii=False, indent=4)
 
         try:
-            # 메모 파일 수정 내용을 Git에 커밋 및 푸시 (메모 루트 디렉토리 사용)
+            # 메모 파일 수정 내용을 Git에 커밋 및 푸시
             git_auto_commit(memo_file_path, f"{selected_team} Memo Deletion", memo_root_dir)
         except GitCommandError as e:
             st.error(f"Git 작업 오류: {e}")
+            git_pull_changes(memo_root_dir)  # memo_root_dir 전달
 
         st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
         time.sleep(1)
