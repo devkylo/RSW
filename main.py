@@ -85,7 +85,7 @@ def git_pull_submodule(submodule_folder):
         repo = Repo(submodule_folder)
     except InvalidGitRepositoryError:
         st.info(f"서브모듈 '{submodule_folder}'가 초기화되지 않았습니다. 초기화를 시도합니다.")
-        # 이미 폴더가 존재하지만 Git 저장소가 아니라면 삭제 후 클론
+        # 폴더가 존재하면 삭제 처리 (비어 있지 않더라도)
         if os.path.exists(submodule_folder):
             try:
                 shutil.rmtree(submodule_folder)
@@ -100,7 +100,7 @@ def git_pull_submodule(submodule_folder):
         except Exception as clone_error:
             st.error(f"서브모듈 '{submodule_folder}' 초기화 중 오류: {clone_error}")
             return
-    
+
     try:
         origin = repo.remote(name='origin')
         origin.pull("main")
