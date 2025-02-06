@@ -113,12 +113,16 @@ def git_auto_commit_submodule(file_path, team_name):
 # -------------------------------------------------------------------
 def git_pull_submodule(submodule_folder):
     try:
+        # 서브모듈 초기화 및 동기화
+        subprocess.run(['git', 'submodule', 'init'], check=True)
+        subprocess.run(['git', 'submodule', 'update', '--remote', '--recursive'], check=True)
+
+        # 지정된 서브모듈 폴더에서 최신 변경사항 가져오기
         repo = Repo(submodule_folder)
         origin = repo.remote(name='origin')
         origin.pull("main")
     except GitCommandError as e:
         st.error(f"서브모듈 '{submodule_folder}' Git 동기화 오류: {e}")
-
 
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
