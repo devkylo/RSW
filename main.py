@@ -120,13 +120,14 @@ def git_auto_commit(file_path, team_name, root_dir):
 # -------------------------------------------------------------------
 # 3) 원격 저장소의 최신 변경사항 동기화 (pull)
 # -------------------------------------------------------------------
-def git_pull_changes():
-    """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
+def git_pull_changes(root_dir):
+    """원격 저장소의 최신 변경사항 동기화 (main 브랜치) 지정한 루트 디렉토리 기준"""
     try:
         repo = Repo(root_dir)
         origin = repo.remote(name='origin')
-        origin.pull("main")
-        st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
+        # 'origin' 인자를 제거하고 브랜치명과 옵션만 전달
+        origin.pull("main", "--allow-unrelated-histories")
+        st.toast(f"{root_dir} GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
     except GitCommandError as e:
         st.error(f"Git 동기화 오류: {e}")
 
