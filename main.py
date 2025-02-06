@@ -645,7 +645,15 @@ st.header(f"{selected_team} - {selected_month} 메모 📓")
 def load_memos(memo_file_path):
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            content = f.read().strip()  # 파일 내용의 좌우 공백 제거
+            if not content:  # 내용이 비어 있다면
+                return []
+            try:
+                return json.loads(content)
+            except json.decoder.JSONDecodeError as e:
+                # 잘못된 JSON 형식인 경우 오류 메시지 출력 후 빈 리스트 반환
+                st.error(f"JSON 형식 오류: {e}")
+                return []
     return []
 
 
