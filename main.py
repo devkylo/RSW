@@ -30,7 +30,10 @@ memo_root_dir = "team_memo"
 def create_dir_safe(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-        #st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
+        # 빈 폴더도 Git에 반영되도록 .gitkeep 파일 생성
+        gitkeep_path = os.path.join(path, ".gitkeep")
+        with open(gitkeep_path, "w") as f:
+            f.write("")
 
 for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
     create_dir_safe(folder)
