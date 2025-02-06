@@ -34,12 +34,17 @@ def git_init_repo():
         repo = Repo.init(schedules_root_dir, initial_branch="main")
         repo.create_remote('origin', st.secrets["GITHUB"]["REPO_URL"])
         
+        # 사용자 이름과 이메일 설정
+        with repo.config_writer() as config:
+            config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
+            config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
+        
         # .gitignore 생성
         gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
-            
-        # <--- 여기서 .gitignore 파일을 스테이징하고 초기 커밋을 생성합니다.
+        
+        # .gitignore 파일 커밋
         repo.index.add([gitignore_path])
         repo.index.commit("Initial commit with .gitignore")
         
