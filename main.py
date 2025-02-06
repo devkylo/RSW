@@ -1,4 +1,5 @@
 import os
+os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -26,7 +27,6 @@ reset_git_config()
 # -------------------------------------------------------------------
 repo_root = "."  # 저장소 루트 (프로젝트 루트)
 korea_tz = pytz.timezone("Asia/Seoul")
-os.environ["GIT_OPTIONAL_LOCKS"] = "0" # optional lock이 비활성화되어 index.lock 파일 관련 오류 해지지
 
 # 디렉토리 경로 설정
 schedules_root_dir = "team_schedules"
