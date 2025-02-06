@@ -35,35 +35,6 @@ for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_
     create_dir_safe(folder)
 
 # -------------------------------------------------------------------
-# 팀 목록 및 디렉토리 생성
-# -------------------------------------------------------------------
-# 팀 목록 정의
-teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안SO팀", "성수SO팀", "중부SO팀"]
-
-# 각 루트 디렉토리에 대해 모든 팀 폴더 생성
-def create_team_directories():
-    root_dirs = [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]
-    
-    for root_dir in root_dirs:
-        # 루트 디렉토리 생성
-        create_dir_safe(root_dir)
-        
-        # 각 팀별 하위 디렉토리 생성 및 placeholder 파일 생성
-        for team in teams:
-            team_dir = os.path.join(root_dir, team)
-            create_dir_safe(team_dir)
-            # Git이 디렉토리를 추적할 수 있게 하는 빈 파일(.gitkeep) 생성
-            placeholder_file = os.path.join(team_dir, ".gitkeep")
-            if not os.path.exists(placeholder_file):
-                with open(placeholder_file, "w") as f:
-                    f.write("")
-
-# Git 초기화 및 동기화 전에 디렉토리 생성 함수 호출
-if 'directories_initialized' not in st.session_state:
-    create_team_directories()
-    st.session_state.directories_initialized = True
-
-# -------------------------------------------------------------------
 # Personal Access Token(PAT)가 포함된 인증 URL 생성 함수
 # -------------------------------------------------------------------
 def build_auth_repo_url():
@@ -86,42 +57,33 @@ def build_auth_repo_url():
 # -------------------------------------------------------------------
 def git_init_repo():
     """Git 저장소 초기화 및 원격 연결 (PAT 적용)"""
-    root_dirs = [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]
+    if not os.path.exists(schedules_root_dir):
+        os.makedirs(schedules_root_dir, exist_ok=True)
     
-    for root_dir in root_dirs:
-        if not os.path.exists(root_dir):
-            os.makedirs(root_dir, exist_ok=True)
+    # .git 폴더가 없으면 초기화 진행
+    if not os.path.exists(os.path.join(schedules_root_dir, ".git")):
+        # 초기 브랜치를 "main"으로 지정하여 저장소 초기화
+        repo = Repo.init(schedules_root_dir, initial_branch="main")
+        # 토큰을 포함한 인증 URL 사용
+        auth_repo_url = build_auth_repo_url()
+        repo.create_remote('origin', auth_repo_url)
         
-        # .git 폴더가 없으면 초기화 진행
-        if not os.path.exists(os.path.join(root_dir, ".git")):
-            # 초기 브랜치를 "main"으로 지정하여 저장소 초기화
-            repo = Repo.init(root_dir, initial_branch="main")
-            # 토큰을 포함한 인증 URL 사용
-            auth_repo_url = build_auth_repo_url()
-            repo.create_remote('origin', auth_repo_url)
-            
-            # 사용자 이름과 이메일 설정
-            with repo.config_writer() as config:
-                config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
-                config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
-            
-            # .gitignore 파일 생성
-            gitignore_path = os.path.join(root_dir, ".gitignore")
-            with open(gitignore_path, "w") as f:
-                f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
-            
-            # 모든 팀 디렉토리를 Git에 추가
-            for team in teams:
-                team_dir = os.path.join(root_dir, team)
-                if os.path.exists(team_dir):
-                    repo.index.add([team_dir])
-            
-            # .gitignore 추가 및 초기 커밋
-            repo.index.add([gitignore_path])
-            repo.index.commit(f"Initial commit with team directories for {root_dir}")
-            
-            # 로컬 브랜치를 main으로 설정
-            repo.git.branch("-M", "main")
+        # 사용자 이름과 이메일 설정 (st.secrets의 값 사용)
+        with repo.config_writer() as config:
+            config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
+            config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
+        
+        # .gitignore 생성 (불필요한 폴더/파일 제외)
+        gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
+        with open(gitignore_path, "w") as f:
+            f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
+        
+        # .gitignore 파일 스테이징 및 초기 커밋
+        repo.index.add([gitignore_path])
+        repo.index.commit("Initial commit with .gitignore")
+        
+        # 로컬 브랜치를 강제로 "main"으로 변경
+        repo.git.branch("-M", "main")
         
         st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
 
