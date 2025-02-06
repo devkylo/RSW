@@ -645,7 +645,14 @@ st.header(f"{selected_team} - {selected_month} 메모 📓")
 def load_memos(memo_file_path):
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            content = f.read().strip()
+            if not content:  # 파일이 빈 경우
+                return []
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                st.error(f"JSON 파일 읽기 오류: {e}")
+                return []
     return []
 
 
