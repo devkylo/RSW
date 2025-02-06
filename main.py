@@ -116,23 +116,23 @@ def git_auto_commit_submodule(file_path, team_name):
 # [2] 서브 저장소별 원격 동기화(pull) 함수
 # -------------------------------------------------------------------
 def git_pull_submodule(submodule_folder):
-    # 서브모듈 폴더가 Git 저장소로 초기화되어 있지 않은 경우를 처리
+    if not os.path.isdir(submodule_folder):
+        print(f"Git 서브 저장소 폴더 '{submodule_folder}'가 존재하지 않습니다.")
+        return None
     try:
-        repo = Repo(submodule_folder)
+        repo = Repo(submodule_folder, search_parent_directories=True)
     except InvalidGitRepositoryError:
-        st.info(f"서브모듈 '{submodule_folder}'가 초기화되지 않았습니다. 원격 저장소에서 클론을 시도합니다.")
-        auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
-        try:
-            repo = Repo.clone_from(auth_url, submodule_folder)
-            st.success(f"서브모듈 '{submodule_folder}' 클론 완료.")
-        except Exception as clone_error:
-            st.error(f"서브모듈 '{submodule_folder}' 클론 중 오류 발생: {clone_error}")
-            return
+        print(f"폴더 '{submodule_folder}'는 유효한 Git 저장소가 아닙니다. 새 저장소를 초기화합니다.")
+        repo = Repo.init(submodule_folder)
     try:
-        origin = repo.remote(name='origin')
-        origin.pull("main")
-    except GitCommandError as e:
-        st.error(f"서브모듈 '{submodule_folder}' Git 동기화 오류: {e}")
+        if repo.remotes:
+            print("Git pull 실행 중...")
+            repo.remotes.origin.pull()
+        else:
+            print("원격 저장소가 설정되어 있지 않습니다.")
+    except Exception as e:
+        print("Git pull 중 오류 발생:", e)
+    return repo
 
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
