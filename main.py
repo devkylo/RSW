@@ -30,7 +30,7 @@ memo_root_dir = "team_memo"
 def create_dir_safe(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-        st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
+        #st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
 
 for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
     create_dir_safe(folder)
@@ -80,7 +80,7 @@ def git_init_repo():
         repo.index.commit("Initial commit with .gitignore")
         repo.git.branch("-M", "main")
         
-        st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
+        #st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
 
 # -------------------------------------------------------------------
 # 2) 변경사항 자동 커밋 및 푸시 함수 (push 전 원격 URL 재설정 포함)
@@ -103,7 +103,7 @@ def git_auto_commit(file_path, team_name):
         origin.set_url(build_auth_repo_url())
         origin.push("HEAD:refs/heads/main")
         
-        st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
+        #st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
 
