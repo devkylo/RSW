@@ -17,42 +17,40 @@ from git import Repo, GitCommandError
 # -------------------------------------------------------------------
 korea_tz = pytz.timezone("Asia/Seoul")
 
-# 디렉토리 경로
+# 디렉토리 경로 설정
 schedules_root_dir = "team_schedules"
 model_example_root_dir = "team_model_example"
 today_schedules_root_dir = "team_today_schedules"
 memo_root_dir = "team_memo"
 
 # -------------------------------------------------------------------
-# 디렉토리 생성 함수
+# 디렉토리 생성 함수: 파일 경로가 없으면 생성
 # -------------------------------------------------------------------
 def create_dir_safe(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
         st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
 
-# 필요한 모든 디렉토리 생성
 for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
     create_dir_safe(folder)
 
 # -------------------------------------------------------------------
-# Personal Access Token(PAT) 포함 원격 URL 생성
+# Personal Access Token(PAT)가 포함된 인증 URL 생성 함수
 # -------------------------------------------------------------------
 def build_auth_repo_url():
     """
     st.secrets에 등록된 REPO_URL과 TOKEN을 이용하여,
     토큰이 포함된 인증 URL을 생성합니다.
-    예: "https://github.com/devkylo/RSW.git" 
-         → "https://<TOKEN>:x-oauth-basic@github.com/devkylo/RSW.git"
+    예: "https://github.com/devkylo/RSW.git" → "https://<TOKEN>:x-oauth-basic@github.com/devkylo/RSW.git"
     """
     repo_url = st.secrets["GITHUB"]["REPO_URL"]
     token = st.secrets["GITHUB"]["TOKEN"]
     if token:
+        # 토큰 뒤에 더미 비밀번호 ":x-oauth-basic"를 추가하여 비대화형 환경에서도 인증을 진행
         auth_repo_url = repo_url.replace("https://", f"https://{token}:x-oauth-basic@")
     else:
         auth_repo_url = repo_url
     return auth_repo_url
-
 
 # -------------------------------------------------------------------
 # 1) Git 저장소 초기화 및 원격 연결 (GitPython, PAT 적용)
@@ -62,18 +60,20 @@ def git_init_repo():
     if not os.path.exists(schedules_root_dir):
         os.makedirs(schedules_root_dir, exist_ok=True)
     
+    # .git 폴더가 없으면 초기화 진행
     if not os.path.exists(os.path.join(schedules_root_dir, ".git")):
         # 초기 브랜치를 "main"으로 지정하여 저장소 초기화
         repo = Repo.init(schedules_root_dir, initial_branch="main")
+        # 토큰을 포함한 인증 URL 사용
         auth_repo_url = build_auth_repo_url()
         repo.create_remote('origin', auth_repo_url)
         
-        # 사용자 이름과 이메일 설정 (st.secrets 사용)
+        # 사용자 이름과 이메일 설정 (st.secrets의 값 사용)
         with repo.config_writer() as config:
             config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
             config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
         
-        # .gitignore 생성
+        # .gitignore 생성 (불필요한 폴더/파일 제외)
         gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
@@ -82,34 +82,39 @@ def git_init_repo():
         repo.index.add([gitignore_path])
         repo.index.commit("Initial commit with .gitignore")
         
-        # 로컬 브랜치를 강제로 "main"으로 변경하여 원격과 일치
+        # 로컬 브랜치를 강제로 "main"으로 변경
         repo.git.branch("-M", "main")
         
         st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
 
 # -------------------------------------------------------------------
-# 2) 변경사항 자동 커밋 및 푸시 함수
+# 2) 변경사항 자동 커밋 및 푸시 함수 (push 전 원격 URL 재설정 포함)
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
+    """
+    파일 저장 후 자동 커밋 및 원격 푸시 (현재 HEAD 기준으로 main 브랜치에 push)
+    """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
         repo = Repo(schedules_root_dir)
+        # 파일 경로를 상대경로로 변환 (schedules_root_dir 기준)
         relative_path = os.path.relpath(file_path, schedules_root_dir)
         repo.index.add([relative_path])
         repo.index.commit(commit_message)
-        # 로컬 브랜치를 강제로 "main"으로 변경
+        
+        # 로컬 브랜치를 강제로 "main"으로 설정
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        # 원격 URL을 최신 인증 URL로 재설정 (토큰 등이 포함된 URL)
+        # push 전에 원격 저장소 URL을 최신 PAT가 포함된 URL로 재설정
         origin.set_url(build_auth_repo_url())
-        # HEAD 기준으로 원격 main 브랜치에 push
+        # HEAD 기준으로 원격의 main 브랜치에 push
         origin.push("HEAD:refs/heads/main")
         st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
 
 # -------------------------------------------------------------------
-# 3) 원격 저장소와 동기화 (pull)
+# 3) 원격 저장소의 최신 변경사항 동기화 (pull)
 # -------------------------------------------------------------------
 def git_pull_changes():
     """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
@@ -122,7 +127,7 @@ def git_pull_changes():
         st.error(f"Git 동기화 오류: {e}")
 
 # -------------------------------------------------------------------
-# Git 초기화 및 동기화 (세션 상태에서 한 번만 실행)
+# Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
 # -------------------------------------------------------------------
 if 'git_initialized' not in st.session_state:
     git_init_repo()
