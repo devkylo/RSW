@@ -77,8 +77,9 @@ def git_init_repo():
         gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
-
-        # 상대 경로를 사용하여 .gitignore 파일 스테이징
+        
+        # .gitignore 파일 스테이징 및 초기 커밋
+        repo.index.add([gitignore_path])
         rel_gitignore = os.path.relpath(gitignore_path, schedules_root_dir)
         repo.index.add([rel_gitignore])
         repo.index.commit("Initial commit with .gitignore")
@@ -156,16 +157,12 @@ selected_month = st.sidebar.selectbox("", months, index=current_month_index)
 selected_month_num = int(selected_month.replace("월", ""))
 
 # 팀별 폴더 경로 설정
-#schedules_folder_path = os.path.join(schedules_root_dir, selected_team)
-team_folder_path = os.path.join(schedules_root_dir, selected_team)
+schedules_folder_path = os.path.join(schedules_root_dir, selected_team)
 model_example_folder_path = os.path.join(model_example_root_dir, selected_team)
 today_team_folder_path = os.path.join(today_schedules_root_dir, selected_team)
 memo_team_folder_path = os.path.join(memo_root_dir, selected_team)
 
-if not os.path.exists(team_folder_path):
-    os.makedirs(team_folder_path, exist_ok=True)
-
-for folder in [team_folder_path, model_example_folder_path, today_team_folder_path, memo_team_folder_path]:
+for folder in [schedules_folder_path, model_example_folder_path, today_team_folder_path, memo_team_folder_path]:
     create_dir_safe(folder)
 
 # 날짜 관련 변수 (근무표 생성을 위해)
@@ -174,7 +171,7 @@ end_date = (start_date + timedelta(days=31)).replace(day=1) - timedelta(days=1)
 date_list = [(start_date + timedelta(days=i)) for i in range((end_date - start_date).days + 1)]
 
 # 파일 경로 설정
-schedules_file_path = os.path.join(team_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+schedules_file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
 model_example_file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
 memo_file_path = os.path.join(memo_team_folder_path, f"{current_year}_{selected_month}_memos.json")
 
