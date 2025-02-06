@@ -48,10 +48,15 @@ def create_team_directories():
         # 루트 디렉토리 생성
         create_dir_safe(root_dir)
         
-        # 각 팀별 하위 디렉토리 생성
+        # 각 팀별 하위 디렉토리 생성 및 placeholder 파일 생성
         for team in teams:
             team_dir = os.path.join(root_dir, team)
             create_dir_safe(team_dir)
+            # Git이 디렉토리를 추적할 수 있게 하는 빈 파일(.gitkeep) 생성
+            placeholder_file = os.path.join(team_dir, ".gitkeep")
+            if not os.path.exists(placeholder_file):
+                with open(placeholder_file, "w") as f:
+                    f.write("")
 
 # Git 초기화 및 동기화 전에 디렉토리 생성 함수 호출
 if 'directories_initialized' not in st.session_state:
