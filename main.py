@@ -1,5 +1,4 @@
 import os
-os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -14,6 +13,8 @@ from cryptography.fernet import Fernet
 from git import Repo, GitCommandError
 import subprocess
 
+
+os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
 # -------------------------------------------------------------------
 # Git 사용자 정보 강제 재설정 함수
 # -------------------------------------------------------------------
