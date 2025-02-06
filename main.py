@@ -57,34 +57,27 @@ def build_auth_repo_url():
 # -------------------------------------------------------------------
 def git_init_repo():
     """Git 저장소 초기화 및 원격 연결 (PAT 적용)"""
-    if not os.path.exists(schedules_root_dir):
-        os.makedirs(schedules_root_dir, exist_ok=True)
+    # 필수 폴더들 생성 (team_schedules, model_example 등)
+    for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
+        create_dir_safe(folder)
     
-    # .git 폴더가 없으면 초기화 진행
-    if not os.path.exists(os.path.join(schedules_root_dir, ".git")):
-        # 초기 브랜치를 "main"으로 지정하여 저장소 초기화
-        repo = Repo.init(schedules_root_dir, initial_branch="main")
-        # 토큰을 포함한 인증 URL 사용
+    # 프로젝트 루트에 .git 폴더가 없으면 저장소 초기화 (저장소 루트가 "."가 됨)
+    if not os.path.exists(".git"):
+        repo = Repo.init(".", initial_branch="main")
         auth_repo_url = build_auth_repo_url()
         repo.create_remote('origin', auth_repo_url)
         
-        # 사용자 이름과 이메일 설정 (st.secrets의 값 사용)
         with repo.config_writer() as config:
             config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
             config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
         
-        # .gitignore 생성 (불필요한 폴더/파일 제외)
-        gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
+        # .gitignore 생성 - Git에 포함하지 않을 폴더만 지정 (team_schedules는 커밋)
+        gitignore_path = ".gitignore"
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
         
-        # .gitignore 파일 스테이징 및 초기 커밋
         repo.index.add([gitignore_path])
-        rel_gitignore = os.path.relpath(gitignore_path, schedules_root_dir)
-        repo.index.add([rel_gitignore])
         repo.index.commit("Initial commit with .gitignore")
-        
-        # 로컬 브랜치를 강제로 "main"으로 변경
         repo.git.branch("-M", "main")
         
         st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
@@ -98,19 +91,18 @@ def git_auto_commit(file_path, team_name):
     """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        repo = Repo(schedules_root_dir)
-        # 파일 경로를 상대경로로 변환 (schedules_root_dir 기준)
-        relative_path = os.path.relpath(file_path, schedules_root_dir)
+        repo = Repo(".")  # repo가 프로젝트 루트에 초기화됨
+        # 파일 경로를 현재 작업 디렉토리 기준 상대 경로로 변환
+        relative_path = os.path.relpath(file_path, os.getcwd())
         repo.index.add([relative_path])
         repo.index.commit(commit_message)
         
-        # 로컬 브랜치를 강제로 "main"으로 설정
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        # push 전에 원격 저장소 URL을 최신 PAT가 포함된 URL로 재설정
+        # push 전에 최신 PAT가 포함된 URL로 설정
         origin.set_url(build_auth_repo_url())
-        # HEAD 기준으로 원격의 main 브랜치에 push
         origin.push("HEAD:refs/heads/main")
+        
         st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
@@ -121,7 +113,7 @@ def git_auto_commit(file_path, team_name):
 def git_pull_changes():
     """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
     try:
-        repo = Repo(schedules_root_dir)
+        repo = Repo(".")
         origin = repo.remote(name='origin')
         origin.pull("main")
         st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
