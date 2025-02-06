@@ -181,40 +181,60 @@ def get_korea_time():
     return datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M:%S')
 
 def save_memo_with_reset(memo_file_path, memo_text, author=""):
-    memo_data = {
-        "note": memo_text,
-        "author": author,
-        "timestamp": get_korea_time()
-    }
-    if os.path.exists(memo_file_path):
-        with open(memo_file_path, "r", encoding="utf-8") as f:
-            memos_list = json.load(f)
-    else:
-        memos_list = []
-
-    # 중복 메모 체크
-    for existing_memo in memos_list:
-        if (existing_memo["note"] == memo_data["note"] and
-            existing_memo["author"] == memo_data["author"] and
-            existing_memo["timestamp"] == memo_data["timestamp"]):
-            st.info("메모가 중복되었습니다. 저장이 취소됩니다.")
-            return
-
-    memos_list.append(memo_data)
-    with open(memo_file_path, "w", encoding="utf-8") as f:
-        json.dump(memos_list, f, ensure_ascii=False, indent=4)
+    try:
+        # 메모 폴더 생성 
+        memo_dir = os.path.dirname(memo_file_path)
+        create_dir_safe(memo_dir)
+        
+        memo_data = {
+            "note": memo_text,
+            "author": author, 
+            "timestamp": get_korea_time()
+        }
+        
+        # 파일이 없으면 빈 리스트로 시작
+        if os.path.exists(memo_file_path):
+            with open(memo_file_path, "r", encoding="utf-8") as f:
+                memos_list = json.load(f)
+        else:
+            memos_list = []
+            
+        # 중복 체크    
+        for existing_memo in memos_list:
+            if (existing_memo["note"] == memo_data["note"] and
+                existing_memo["author"] == memo_data["author"] and 
+                existing_memo["timestamp"] == memo_data["timestamp"]):
+                st.info("메모가 중복되었습니다. 저장이 취소됩니다.")
+                return False
+                
+        # 메모 추가 및 저장
+        memos_list.append(memo_data)
+        with open(memo_file_path, "w", encoding="utf-8") as f:
+            json.dump(memos_list, f, ensure_ascii=False, indent=4)
+            
+        return True
+            
+    except Exception as e:
+        st.error(f"메모 저장 중 오류 발생: {e}")
+        return False
 
 def save_and_reset():
     if st.session_state.new_memo_text.strip():
-        save_memo_with_reset(memo_file_path,
-                             st.session_state.new_memo_text.strip(),
-                             author=st.session_state.author_name)
-        # GitHub의 최신 데이터 동기화 (pull)
+        # GitHub 최신 데이터 동기화
         git_pull_changes()
-        # 메모 파일 변경사항 자동 커밋 및 원격 푸시
-        git_auto_commit(memo_file_path, selected_team)
-        st.session_state.new_memo_text = ""
-        st.toast("메모가 저장되었습니다!", icon="✅")
+        
+        # 메모 저장 시도
+        if save_memo_with_reset(memo_file_path,
+                              st.session_state.new_memo_text.strip(),
+                              author=st.session_state.author_name):
+                              
+            try:
+                # Git에 변경사항 커밋 및 푸시
+                git_auto_commit(memo_file_path, selected_team)
+                st.session_state.new_memo_text = ""
+                st.toast("메모가 저장되었습니다!", icon="✅")
+            except Exception as e:
+                st.error(f"Git 저장 중 오류 발생: {e}")
     else:
         st.toast("빈 메모는 저장할 수 없습니다!", icon="⚠️")
 
