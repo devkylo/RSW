@@ -55,65 +55,61 @@ def build_auth_repo_url():
 # -------------------------------------------------------------------
 # 1) Git 저장소 초기화 및 원격 연결 (GitPython, PAT 적용)
 # -------------------------------------------------------------------
-def git_init_repo():
+def git_init_repo(root_dir):
     """Git 저장소 초기화 및 원격 연결 (PAT 적용)"""
-    if not os.path.exists(schedules_root_dir):
-        os.makedirs(schedules_root_dir, exist_ok=True)
+    if not os.path.exists(root_dir):
+        os.makedirs(root_dir, exist_ok=True)
     
     # .git 폴더가 없으면 초기화 진행
-    if not os.path.exists(os.path.join(schedules_root_dir, ".git")):
+    if not os.path.exists(os.path.join(root_dir, ".git")):
         # 초기 브랜치를 "main"으로 지정하여 저장소 초기화
-        repo = Repo.init(schedules_root_dir, initial_branch="main")
+        repo = Repo.init(root_dir, initial_branch="main")
         # 토큰을 포함한 인증 URL 사용
         auth_repo_url = build_auth_repo_url()
         repo.create_remote('origin', auth_repo_url)
         
-        # 사용자 이름과 이메일 설정 (st.secrets의 값 사용)
+        # 사용자 이름과 이메일 설정
         with repo.config_writer() as config:
             config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
             config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
         
-        # .gitignore 생성 (불필요한 폴더/파일 제외)
-        gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
+        # .gitignore 생성
+        gitignore_path = os.path.join(root_dir, ".gitignore")
         with open(gitignore_path, "w") as f:
-            f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
+            f.write("*.tmp\n")
         
         # .gitignore 파일 스테이징 및 초기 커밋
-        repo.index.add([gitignore_path])
-        rel_gitignore = os.path.relpath(gitignore_path, schedules_root_dir)
+        rel_gitignore = os.path.relpath(gitignore_path, root_dir)
         repo.index.add([rel_gitignore])
         repo.index.commit("Initial commit with .gitignore")
         
         # 로컬 브랜치를 강제로 "main"으로 변경
         repo.git.branch("-M", "main")
         
-        st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
+        st.toast(f"{root_dir} Git 저장소가 초기화되었습니다.", icon="✅")
+
 
 # -------------------------------------------------------------------
 # 2) 변경사항 자동 커밋 및 푸시 함수 (push 전 원격 URL 재설정 포함)
 # -------------------------------------------------------------------
-def git_auto_commit(file_path, team_name):
-    """
-    파일 저장 후 자동 커밋 및 원격 푸시 (현재 HEAD 기준으로 main 브랜치에 push)
-    """
+def git_auto_commit(file_path, team_name, root_dir):
+    """파일 저장 후 자동 커밋 및 원격 푸시"""
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        repo = Repo(schedules_root_dir)
-        # 파일 경로를 상대경로로 변환 (schedules_root_dir 기준)
-        relative_path = os.path.relpath(file_path, schedules_root_dir)
+        repo = Repo(root_dir)
+        # 파일 경로를 상대경로로 변환
+        relative_path = os.path.relpath(file_path, root_dir)
         repo.index.add([relative_path])
         repo.index.commit(commit_message)
         
-        # 로컬 브랜치를 강제로 "main"으로 설정
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        # push 전에 원격 저장소 URL을 최신 PAT가 포함된 URL로 재설정
         origin.set_url(build_auth_repo_url())
-        # HEAD 기준으로 원격의 main 브랜치에 push
         origin.push("HEAD:refs/heads/main")
         st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
+
 
 # -------------------------------------------------------------------
 # 3) 원격 저장소의 최신 변경사항 동기화 (pull)
@@ -131,9 +127,26 @@ def git_pull_changes():
 # -------------------------------------------------------------------
 # Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
 # -------------------------------------------------------------------
+# Git 초기화 및 동기화
 if 'git_initialized' not in st.session_state:
-    git_init_repo()
-    git_pull_changes()
+    # 모든 루트 디렉토리에 대해 Git 초기화
+    root_dirs = [
+        schedules_root_dir,
+        model_example_root_dir,
+        today_schedules_root_dir,
+        memo_root_dir
+    ]
+    
+    for root_dir in root_dirs:
+        git_init_repo(root_dir)
+        try:
+            repo = Repo(root_dir)
+            origin = repo.remote(name='origin')
+            origin.pull("main")
+            st.toast(f"{root_dir} GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
+        except GitCommandError as e:
+            st.error(f"Git 동기화 오류: {e}")
+    
     st.session_state.git_initialized = True
 
 # -------------------------------------------------------------------
