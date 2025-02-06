@@ -87,25 +87,27 @@ def git_init_repo():
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
     """
-    파일 저장 후 자동 커밋 및 원격 푸시 (현재 HEAD 기준으로 main 브랜치에 push)
+    파일 저장 후 자동 커밋 및 원격 푸시 (파일이 존재하면 add, 없으면 remove하여 삭제를 반영)
     """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
         repo = Repo(repo_root)  # repo_root 기준으로 작업
         # file_path를 repo_root 기준 상대경로로 변환
         relative_path = os.path.relpath(file_path, repo_root)
-        repo.index.add([relative_path])
+        # 파일이 존재하면 추가, 존재하지 않으면 삭제 상태를 인덱스에 반영
+        if os.path.exists(file_path):
+            repo.index.add([relative_path])
+        else:
+            repo.index.remove([relative_path])
         repo.index.commit(commit_message)
-        
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        # push 전에 최신 PAT가 포함된 URL로 재설정
+        # 최신 PAT가 포함된 URL로 재설정 후 push
         origin.set_url(build_auth_repo_url())
         origin.push("HEAD:refs/heads/main")
-        
-        #st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
+
 
 # -------------------------------------------------------------------
 # 3) 원격 저장소의 최신 변경사항 동기화 (pull)
@@ -313,14 +315,17 @@ if password:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
                     git_pull_changes()
             elif st.session_state.schedules_upload_canceled:
-                if os.path.exists(schedules_file_path):
-                    try:
-                        os.remove(schedules_file_path)
-                        git_auto_commit(schedules_file_path, "File Deletion")
-                        st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
-                    except Exception as delete_error:
-                        st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                        git_pull_changes()
+                file_path = os.path.join(schedules_file_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+                try:
+                    # 파일이 있으면 삭제; 없으면 그냥 넘어감
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
+                    git_auto_commit(file_path, selected_team)
+                    st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
+                except Exception as delete_error:
+                    st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
+                    git_pull_changes()
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
@@ -365,14 +370,16 @@ if password:
                     git_pull_changes()
             elif st.session_state.model_example_upload_canceled:
                 file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
-                if os.path.exists(file_path):
-                    try:
+                try:
+                    # 파일이 있으면 삭제; 없으면 그냥 넘어감
+                    if os.path.exists(file_path):
                         os.remove(file_path)
-                        git_auto_commit(file_path, "File Deletion")
-                        st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
-                    except Exception as delete_error:
-                        st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                        git_pull_changes()
+                    # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
+                    git_auto_commit(file_path, selected_team)
+                    st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
+                except Exception as delete_error:
+                    st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
+                    git_pull_changes()
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
     else:
