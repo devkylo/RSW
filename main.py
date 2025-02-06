@@ -24,6 +24,17 @@ today_schedules_root_dir = "team_today_schedules"
 memo_root_dir = "team_memo"
 
 # -------------------------------------------------------------------
+# 디렉토리 생성 함수: 파일 경로가 없으면 생성
+# -------------------------------------------------------------------
+def create_dir_safe(path):
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+        st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
+
+for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
+    create_dir_safe(folder)
+
+# -------------------------------------------------------------------
 # 팀 목록 및 디렉토리 생성
 # -------------------------------------------------------------------
 # 팀 목록 정의
@@ -46,17 +57,6 @@ def create_team_directories():
 if 'directories_initialized' not in st.session_state:
     create_team_directories()
     st.session_state.directories_initialized = True
-    
-# -------------------------------------------------------------------
-# 디렉토리 생성 함수: 파일 경로가 없으면 생성
-# -------------------------------------------------------------------
-def create_dir_safe(path):
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
-        st.toast(f"{path} 디렉토리 생성 완료", icon="📂")
-
-for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
-    create_dir_safe(folder)
 
 # -------------------------------------------------------------------
 # Personal Access Token(PAT)가 포함된 인증 URL 생성 함수
