@@ -85,27 +85,32 @@ def git_pull_submodule(submodule_folder):
         repo = Repo(submodule_folder)
     except InvalidGitRepositoryError:
         st.info(f"서브모듈 '{submodule_folder}'가 초기화되지 않았습니다. 초기화를 시도합니다.")
-        # 폴더가 존재하면 삭제 처리 (비어 있지 않더라도)
+        
+        # 폴더가 존재하면 강제 삭제
         if os.path.exists(submodule_folder):
             try:
                 shutil.rmtree(submodule_folder)
                 st.info(f"기존 '{submodule_folder}' 폴더를 삭제하였습니다.")
             except Exception as del_error:
-                st.error(f"'{submodule_folder}' 폴더 삭제 중 오류 발생: {del_error}")
+                st.error(f"폴더 삭제 실패: {del_error}")
                 return
+        
+        # 인증 URL 생성
         auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
+        
+        # 클론 시도
         try:
             repo = Repo.clone_from(auth_url, submodule_folder)
             st.success(f"서브모듈 '{submodule_folder}' 초기화 완료")
         except Exception as clone_error:
-            st.error(f"서브모듈 '{submodule_folder}' 초기화 중 오류: {clone_error}")
+            st.error(f"클론 실패: {clone_error}")
             return
 
     try:
         origin = repo.remote(name='origin')
         origin.pull("main")
     except GitCommandError as e:
-        st.error(f"서브모듈 '{submodule_folder}' Git 동기화 오류: {e}")
+        st.error(f"동기화 오류: {e}")
 
 # -------------------------------------------------------------------
 # [2] 서브모듈별 원격 저장소의 최신 변경사항 동기화 (pull)
