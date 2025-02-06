@@ -88,24 +88,38 @@ def git_init_repo():
 def git_auto_commit(file_path, team_name):
     """
     파일 저장 후 자동 커밋 및 원격 푸시 (현재 HEAD 기준으로 main 브랜치에 push)
+    PAT가 포함된 https URL이 적용되도록 (ssh:// 제거 포함) 처리합니다.
     """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        repo = Repo(".")  # repo가 프로젝트 루트에 초기화됨
-        # 파일 경로를 현재 작업 디렉토리 기준 상대 경로로 변환
+        # 프로젝트 루트(".") 기준으로 repo 인스턴스 생성
+        repo = Repo(".")
+        # file_path를 현재 작업 디렉토리 기준 상대경로로 변환
         relative_path = os.path.relpath(file_path, os.getcwd())
         repo.index.add([relative_path])
         repo.index.commit(commit_message)
         
+        # main 브랜치로 강제 변경
         repo.git.branch("-M", "main")
-        origin = repo.remote(name='origin')
-        # push 전에 최신 PAT가 포함된 URL로 설정
-        origin.set_url(build_auth_repo_url())
-        origin.push("HEAD:refs/heads/main")
+        origin = repo.remote(name="origin")
+        
+        # build_auth_repo_url()를 통해 PAT가 포함된 URL 생성
+        auth_url = build_auth_repo_url()
+        # 만약 URL에 ssh://가 포함되어 있다면 제거하여 https:// 형식으로 변환
+        if auth_url.startswith("ssh://"):
+            auth_url = auth_url.replace("ssh://", "")
+        origin.set_url(auth_url)
+        
+        # HEAD를 기준으로 main 브랜치에 push 진행
+        push_results = origin.push("HEAD:refs/heads/main")
+        # 푸시 결과를 간단히 확인 (필요 시 에러 체크 추가 가능)
+        for res in push_results:
+            if res.flags:
+                st.toast(f"Push 상태: {res.summary}", icon="ℹ️")
         
         st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
-    except GitCommandError as e:
-        st.error(f"Git 작업 오류: {e}")
+    except GitCommandError as error:
+        st.error(f"Git 작업 오류: {error}")
 
 # -------------------------------------------------------------------
 # 3) 원격 저장소의 최신 변경사항 동기화 (pull)
