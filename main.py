@@ -209,6 +209,10 @@ def save_and_reset():
         save_memo_with_reset(memo_file_path,
                              st.session_state.new_memo_text.strip(),
                              author=st.session_state.author_name)
+        # GitHub의 최신 데이터 동기화 (pull)
+        git_pull_changes()
+        # 메모 파일 변경사항 자동 커밋 및 원격 푸시
+        git_auto_commit(memo_file_path, selected_team)
         st.session_state.new_memo_text = ""
         st.toast("메모가 저장되었습니다!", icon="✅")
     else:
@@ -466,6 +470,7 @@ try:
             st.warning(f"선택한 날짜 ({today_column})에 해당하는 데이터가 없습니다.")
 
         def save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping):
+            created_files = []  # 생성된 JSON 파일 경로를 저장하는 리스트
             for date in date_list:
                 month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
                 if not os.path.exists(month_folder):
@@ -476,16 +481,19 @@ try:
                     df_schedule["근무 형태"] = df_schedule[today_column].map(work_mapping).fillna("")
                     day_shift = df_schedule[df_schedule["근무 형태"].str.contains("주", na=False)].copy()
                     day_shift_data = day_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
+                        columns={"파트 구분": "파트", today_column: "근무"}
+                    ).to_dict(orient="records")
 
                     night_shift = df_schedule[df_schedule["근무 형태"].str.contains("야", na=False)].copy()
                     night_shift_data = night_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
+                        columns={"파트 구분": "파트", today_column: "근무"}
+                    ).to_dict(orient="records")
 
                     vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
                     vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
                     vacation_shift_data = vacation_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
+                        columns={"파트 구분": "파트", today_column: "근무"}
+                    ).to_dict(orient="records")
 
                     schedule_data = {
                         "date": date.strftime('%Y-%m-%d'),
@@ -502,8 +510,16 @@ try:
                     }
                 with open(json_file_path, "w", encoding="utf-8") as json_file:
                     json.dump(schedule_data, json_file, ensure_ascii=False, indent=4)
+                created_files.append(json_file_path)
+            
+            # GitHub와 동기화: 원격 변경사항을 pull한 후 생성된 파일들을 개별 커밋 및 푸시
+            git_pull_changes()
+            for file_path in created_files:
+                git_auto_commit(file_path, selected_team)
 
+        # 함수 실행 예시
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
+
 
         def validate_date_format(date_str):
             try:
@@ -613,6 +629,11 @@ def delete_memo_and_refresh(timestamp):
         updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
         with open(memo_file_path, "w", encoding="utf-8") as f:
             json.dump(updated_memos, f, ensure_ascii=False, indent=4)
+
+            # GitHub의 최신 데이터 동기화 (pull)
+            git_pull_changes()
+            # 메모 파일 변경사항 자동 커밋 및 원격 푸시
+            git_auto_commit(memo_file_path, selected_team)
 
         st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
         time.sleep(1)
