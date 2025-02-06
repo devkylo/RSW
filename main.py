@@ -77,9 +77,8 @@ def git_init_repo():
         gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
-        
-        # .gitignore 파일 스테이징 및 초기 커밋
-        repo.index.add([gitignore_path])
+
+        # 상대 경로를 사용하여 .gitignore 파일 스테이징
         rel_gitignore = os.path.relpath(gitignore_path, schedules_root_dir)
         repo.index.add([rel_gitignore])
         repo.index.commit("Initial commit with .gitignore")
