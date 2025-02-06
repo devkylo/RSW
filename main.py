@@ -12,6 +12,7 @@ from urllib.parse import unquote
 from git import Repo, GitCommandError
 import subprocess
 from git.exc import InvalidGitRepositoryError
+import shutil  # 새로운 디렉토리 삭제를 위해 추가
 
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
@@ -79,34 +80,32 @@ repo_url_mapping = st.secrets["GITHUB"].get("REPO_URL_MAPPING", {
 # -------------------------------------------------------------------
 # [1] 서브모듈별 Git 자동 커밋 및 푸시 함수
 # -------------------------------------------------------------------
-def git_auto_commit_submodule(file_path, team_name):
-    # 파일이 속한 서브모듈 폴더 확인 (네 폴더 중 어느 곳에 있는지)
-    file_path_abs = os.path.abspath(file_path)
-    submodule_folder = None
-    for folder in submodule_dirs:
-        if file_path_abs.startswith(os.path.abspath(folder)):
-            submodule_folder = folder
-            break
-    if not submodule_folder:
-        st.error("해당 파일은 어떤 서브모듈에도 속하지 않습니다.")
-        return
-
-    commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
+def git_pull_submodule(submodule_folder):
     try:
         repo = Repo(submodule_folder)
-        # 파일 경로를 서브모듈 기준 상대경로로 변환
-        relative_path = os.path.relpath(file_path, os.path.abspath(submodule_folder))
-        if os.path.exists(file_path):
-            repo.index.add([relative_path])
-        else:
-            repo.index.remove([relative_path])
-        repo.index.commit(commit_message)
-        origin = repo.remote(name='origin')
+    except InvalidGitRepositoryError:
+        st.info(f"서브모듈 '{submodule_folder}'가 초기화되지 않았습니다. 초기화를 시도합니다.")
+        # 이미 폴더가 존재하지만 Git 저장소가 아니라면 삭제 후 클론
+        if os.path.exists(submodule_folder):
+            try:
+                shutil.rmtree(submodule_folder)
+                st.info(f"기존 '{submodule_folder}' 폴더를 삭제하였습니다.")
+            except Exception as del_error:
+                st.error(f"'{submodule_folder}' 폴더 삭제 중 오류 발생: {del_error}")
+                return
         auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
-        origin.set_url(auth_url)
-        origin.push("HEAD:refs/heads/main")
+        try:
+            repo = Repo.clone_from(auth_url, submodule_folder)
+            st.success(f"서브모듈 '{submodule_folder}' 초기화 완료")
+        except Exception as clone_error:
+            st.error(f"서브모듈 '{submodule_folder}' 초기화 중 오류: {clone_error}")
+            return
+    
+    try:
+        origin = repo.remote(name='origin')
+        origin.pull("main")
     except GitCommandError as e:
-        st.error(f"서브모듈 '{submodule_folder}' Git 작업 오류: {e}")
+        st.error(f"서브모듈 '{submodule_folder}' Git 동기화 오류: {e}")
 
 # -------------------------------------------------------------------
 # [2] 서브모듈별 원격 저장소의 최신 변경사항 동기화 (pull)
