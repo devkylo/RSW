@@ -10,59 +10,64 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 from collections import defaultdict
 from urllib.parse import unquote
 from cryptography.fernet import Fernet
+from git import Repo, GitCommandError
 
+# 한국 시간대 설정
 korea_tz = pytz.timezone("Asia/Seoul")
 
-# ------------------------------------------------------------------------------
-# 1) GitHub 초기화 모듈
-# ------------------------------------------------------------------------------
+# 디렉토리 경로 설정
+schedules_root_dir = "team_schedules"
+model_example_root_dir = "team_model_example"
+today_schedules_root_dir = "team_today_schedules"
+memo_root_dir = "team_memo"
+
+# -------------------------------------------------------------------
+# 1) Git 저장소 초기화 및 원격 연결 (GitPython 사용)
+# -------------------------------------------------------------------
 def git_init_repo():
     """Git 저장소 초기화 및 원격 연결"""
     if not os.path.exists(schedules_root_dir):
         os.makedirs(schedules_root_dir, exist_ok=True)
-        os.system(f'cd {schedules_root_dir} && git init')
-        os.system(f'cd {schedules_root_dir} && git remote add origin {st.secrets["GITHUB"]["REPO_URL"]}')
-        # .gitignore 자동 생성
-        with open(os.path.join(schedules_root_dir, ".gitignore"), "w") as f:
+    
+    if not os.path.exists(os.path.join(schedules_root_dir, ".git")):
+        repo = Repo.init(schedules_root_dir)
+        repo.create_remote('origin', st.secrets["GITHUB"]["REPO_URL"])
+        # .gitignore 생성
+        gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
+        with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
+        st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
 
+# -------------------------------------------------------------------
+# 2) 변경사항 자동 커밋 및 푸시 함수
+# -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
-    """변경사항 자동 커밋"""
+    """변경사항 자동 커밋 및 푸시"""
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
-    os.system(f'cd {schedules_root_dir} && git add {file_path}')
-    os.system(f'cd {schedules_root_dir} && git commit -m "{commit_message}"')
-    os.system(f'cd {schedules_root_dir} && git push origin main')
+    try:
+        repo = Repo(schedules_root_dir)
+        relative_path = os.path.relpath(file_path, schedules_root_dir)
+        repo.index.add([relative_path])
+        repo.index.commit(commit_message)
+        origin = repo.remote(name='origin')
+        origin.push(refspec='main:main')  # main 브랜치 기준
+        st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
+    except GitCommandError as e:
+        st.error(f"Git 작업 오류: {e}")
 
 def git_pull_changes():
     """최신 변경사항 동기화"""
-    os.system(f'cd {schedules_root_dir} && git pull origin main')
+    try:
+        repo = Repo(schedules_root_dir)
+        origin = repo.remote(name='origin')
+        origin.pull()
+        st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
+    except GitCommandError as e:
+        st.error(f"Git 동기화 오류: {e}")
 
-def handle_git_conflicts():
-    """충돌 자동 해결"""
-    conflicts = os.popen(f'cd {schedules_root_dir} && git diff --name-only --diff-filter=U').read()
-    if conflicts:
-        st.warning("충돌 감지! 자동 해결 시도 중...")
-        os.system(f'cd {schedules_root_dir} && git checkout --theirs .')
-        git_auto_commit(conflicts, "Conflict Resolution")
-        st.rerun()
-
-def encrypt_data(data):
-    """데이터 암호화 예시 함수"""
-    cipher = Fernet(st.secrets["CRYPTO"]["KEY"])
-    return cipher.encrypt(data.encode())
-
-# ------------------------------------------------------------------------------
-# 2) 디렉토리 생성 로직
-# ------------------------------------------------------------------------------
-schedules_root_dir = "team_schedules"
-model_example_root_dir = "team_model_example"
-today_schedules_root_dir = "team_today_schedules" # 매일 근무자 dir 생성
-memo_root_dir = "team_memo"
-
-# GitHub 저장소 초기화 (최상단에서 1회 실행)
-git_init_repo()
-git_pull_changes()
-
+# -------------------------------------------------------------------
+# 3) 디렉토리 생성 로직
+# -------------------------------------------------------------------
 def create_dir_safe(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
@@ -71,29 +76,25 @@ def create_dir_safe(path):
 for d in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
     create_dir_safe(d)
 
-# 앱 시작 시 최초 동기화
-if 'git_synced' not in st.session_state:
+# Git 저장소 초기화 및 동기화
+if 'git_initialized' not in st.session_state:
+    git_init_repo()
     git_pull_changes()
-    st.session_state.git_synced = True
-
-# 10분 단위 실시간 동기화
-if (datetime.now() - st.session_state.get('last_sync', datetime.now())).seconds > 600:
-    git_pull_changes()
-    st.session_state.last_sync = datetime.now()
-    #st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
+    st.session_state.git_initialized = True
 
 # ------------------------------------------------------------------------------
 # Streamlit UI
 # ------------------------------------------------------------------------------
 st.title("Rotation Scheduler WebService 💻")
 
+# 팀 및 월 선택
 st.sidebar.title("팀 선택 ✅")
 teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안SO팀", "성수SO팀", "중부SO팀"]
 selected_team = st.sidebar.radio("", teams)
 
 today_date = datetime.now(korea_tz)
-current_year = datetime.now().year
-current_month = datetime.now().month
+current_year = today_date.year
+current_month = today_date.month
 
 st.sidebar.title("월 선택 📅")
 months = [f"{i}월" for i in range(1, 13)]
@@ -101,29 +102,30 @@ current_month_index = current_month - 1
 selected_month = st.sidebar.selectbox("", months, index=current_month_index)
 selected_month_num = int(selected_month.replace("월", ""))
 
+# 팀별 폴더 경로 설정
 schedules_folder_path = os.path.join(schedules_root_dir, selected_team)
 model_example_folder_path = os.path.join(model_example_root_dir, selected_team)
 today_team_folder_path = os.path.join(today_schedules_root_dir, selected_team)
 memo_team_folder_path = os.path.join(memo_root_dir, selected_team)
 
-create_dir_safe(schedules_folder_path)
-create_dir_safe(model_example_folder_path)
-create_dir_safe(today_team_folder_path)
-create_dir_safe(memo_team_folder_path)
+for folder in [schedules_folder_path, model_example_folder_path, today_team_folder_path, memo_team_folder_path]:
+    create_dir_safe(folder)
 
+# 날짜 관련 변수 (근무표 생성을 위해)
 start_date = datetime(current_year, selected_month_num, 1)
 end_date = (start_date + timedelta(days=31)).replace(day=1) - timedelta(days=1)
 date_list = [(start_date + timedelta(days=i)) for i in range((end_date - start_date).days + 1)]
 
+# 파일 경로 설정
 schedules_file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
 model_example_file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
 memo_file_path = os.path.join(memo_team_folder_path, f"{current_year}_{selected_month}_memos.json")
 
+# ---------- 메모 관련 함수 및 UI ----------
 st.sidebar.title("메모 추가 ✏️")
 
 if 'new_memo_text' not in st.session_state:
     st.session_state.new_memo_text = ""
-
 if 'author_name' not in st.session_state:
     st.session_state.author_name = ""
 
@@ -142,11 +144,12 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
     else:
         memos_list = []
 
+    # 중복 메모 체크
     for existing_memo in memos_list:
         if (existing_memo["note"] == memo_data["note"] and
             existing_memo["author"] == memo_data["author"] and
             existing_memo["timestamp"] == memo_data["timestamp"]):
-            print("메모가 중복되었습니다. 저장이 취소됩니다.")
+            st.info("메모가 중복되었습니다. 저장이 취소됩니다.")
             return
 
     memos_list.append(memo_data)
@@ -155,50 +158,47 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
 
 def save_and_reset():
     if st.session_state.new_memo_text.strip():
-        save_memo_with_reset(
-            memo_file_path,
-            st.session_state.new_memo_text.strip(),
-            author=st.session_state.author_name
-        )
+        save_memo_with_reset(memo_file_path,
+                             st.session_state.new_memo_text.strip(),
+                             author=st.session_state.author_name)
         st.session_state.new_memo_text = ""
         st.toast("메모가 저장되었습니다!", icon="✅")
     else:
         st.toast("빈 메모는 저장할 수 없습니다!", icon="⚠️")
 
-st.sidebar.text_input(
-    "작성자 이름",
-    placeholder="작성자 이름을 입력하세요...",
-    key="author_name"
-)
-st.sidebar.text_area(
-    "메모 내용",
-    placeholder="여기에 메모를 입력하세요...",
-    key="new_memo_text"
-)
+st.sidebar.text_input("작성자 이름",
+                      placeholder="작성자 이름을 입력하세요...",
+                      key="author_name")
+st.sidebar.text_area("메모 내용",
+                     placeholder="여기에 메모를 입력하세요...",
+                     key="new_memo_text")
 st.sidebar.button("메모 저장", on_click=save_and_reset)
 
+# ---------- 관리자 로그인 및 파일 업로드 ----------
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
 
 st.sidebar.title("관리자 로그인 🔒")
 password = st.sidebar.text_input("비밀번호 입력 🔑", type="password")
 
+# 업로드 처리 상태 변수 초기화
 if "schedules_upload_confirmed" not in st.session_state:
     st.session_state.schedules_upload_confirmed = False
 if "schedules_upload_canceled" not in st.session_state:
     st.session_state.schedules_upload_canceled = False
-
 if "model_example_upload_confirmed" not in st.session_state:
     st.session_state.model_example_upload_confirmed = False
 if "model_example_upload_canceled" not in st.session_state:
     st.session_state.model_example_upload_canceled = False
 
 if password:
+    # st.secrets의 teams 섹션에 등록된 비밀번호 이용
     correct_password = st.secrets["teams"].get(selected_team)
     if password == correct_password:
         st.session_state.admin_authenticated = True
         st.sidebar.success(f"{selected_team} 관리자 모드 활성화 ✨")
 
+        # 근무표 파일 업로드
         uploaded_schedule_file = st.sidebar.file_uploader(
             f"{selected_team} 근무표 파일 업로드 🔼",
             type=["xlsx", "csv"],
@@ -223,45 +223,35 @@ if password:
                         uploaded_schedule_file.seek(0)
                         try:
                             df = pd.read_csv(uploaded_schedule_file, encoding='utf-8-sig')
-                        except:
+                        except Exception:
                             try:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='utf-8')
-                            except:
+                            except Exception:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
 
-                    file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
-                    try:
-                        # ------------------------------------------------------------------------------
-                        # 3) 파일 저장 로직 (GitHub 연동)
-                        # ------------------------------------------------------------------------------
-                        df.to_csv(file_path, index=False, encoding='utf-8-sig')
-                        git_auto_commit(file_path, selected_team)
-                        st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
-                    except Exception as save_error:
-                        st.sidebar.error(f"파일 처리 중 오류: {save_error}")
-                        git_pull_changes()
-
+                    # 파일 저장 및 Git 커밋/푸시
+                    df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
+                    git_auto_commit(schedules_file_path, selected_team)
+                    st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-
+                    git_pull_changes()
             elif st.session_state.schedules_upload_canceled:
-                file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
-                if os.path.exists(file_path):
+                if os.path.exists(schedules_file_path):
                     try:
-                        # ------------------------------------------------------------------------------
-                        # 4) 관리자 모드 파일 삭제 로직 (GitHub 연동)
-                        # ------------------------------------------------------------------------------
-                        os.remove(file_path)
-                        git_auto_commit("*.csv", "File Deletion")
+                        os.remove(schedules_file_path)
+                        # 삭제 시 실제 변경된 파일 경로를 지정하는 것이 좋습니다.
+                        git_auto_commit(schedules_file_path, "File Deletion")
                         st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
                     except Exception as delete_error:
-                        st.sidebar.error(f"삭제 오류: {delete_error}")
+                        st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
                         git_pull_changes()
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
+        # 범례 파일 업로드
         uploaded_model_example_file = st.sidebar.file_uploader(
             f"{selected_team} 범례 파일 업로드 🔼",
             type=["xlsx", "csv"],
@@ -286,32 +276,27 @@ if password:
                         uploaded_model_example_file.seek(0)
                         try:
                             df = pd.read_csv(uploaded_model_example_file, encoding='utf-8-sig')
-                        except:
+                        except Exception:
                             try:
                                 uploaded_model_example_file.seek(0)
                                 df = pd.read_csv(uploaded_model_example_file, encoding='utf-8')
-                            except:
+                            except Exception:
                                 uploaded_model_example_file.seek(0)
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
 
                     file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
-                    try:
-                        df.to_csv(file_path, index=False, encoding='utf-8-sig')
-                        git_auto_commit(file_path, selected_team)
-                        st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
-                    except Exception as save_error:
-                        st.sidebar.error(f"파일 처리 중 오류 발생: {save_error}")
-                        git_pull_changes()
-
+                    df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                    git_auto_commit(file_path, selected_team)
+                    st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-
+                    git_pull_changes()
             elif st.session_state.model_example_upload_canceled:
                 file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
-                        git_auto_commit("*.csv", "File Deletion")
+                        git_auto_commit(file_path, "File Deletion")
                         st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
                     except Exception as delete_error:
                         st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
