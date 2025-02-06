@@ -116,7 +116,7 @@ def git_pull_changes():
         repo = Repo(repo_root)
         origin = repo.remote(name='origin')
         origin.pull("main")
-        st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
+        #st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
     except GitCommandError as e:
         st.error(f"Git 동기화 오류: {e}")
 
