@@ -30,9 +30,10 @@ def git_init_repo():
         os.makedirs(schedules_root_dir, exist_ok=True)
     
     if not os.path.exists(os.path.join(schedules_root_dir, ".git")):
-        repo = Repo.init(schedules_root_dir)
+        # 기본 브랜치를 "main"으로 명시하여 초기화
+        repo = Repo.init(schedules_root_dir, initial_branch="main")
         repo.create_remote('origin', st.secrets["GITHUB"]["REPO_URL"])
-        # .gitignore 생성
+        # .gitignore 작성
         gitignore_path = os.path.join(schedules_root_dir, ".gitignore")
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
@@ -56,11 +57,12 @@ def git_auto_commit(file_path, team_name):
         st.error(f"Git 작업 오류: {e}")
 
 def git_pull_changes():
-    """최신 변경사항 동기화"""
+    """원격 저장소의 최신 변경사항 동기화 (명시적으로 main 브랜치 지정)"""
     try:
         repo = Repo(schedules_root_dir)
         origin = repo.remote(name='origin')
-        origin.pull()
+        # 명시적으로 'main' 브랜치에서 변경사항을 pull
+        origin.pull("main")
         st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
     except GitCommandError as e:
         st.error(f"Git 동기화 오류: {e}")
