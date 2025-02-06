@@ -11,8 +11,6 @@ from collections import defaultdict
 from urllib.parse import unquote
 from git import Repo, GitCommandError
 import subprocess
-from git.exc import InvalidGitRepositoryError
-import shutil  # 새로운 디렉토리 삭제를 위해 추가
 
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
@@ -93,7 +91,7 @@ def git_auto_commit_submodule(file_path, team_name):
 
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        repo = Repo(submodule_folder)
+        repo = Repo(submodule_folder, search_parent_directories=True)
         # 파일 경로를 서브모듈 기준 상대경로로 변환
         relative_path = os.path.relpath(file_path, os.path.abspath(submodule_folder))
         if os.path.exists(file_path):
