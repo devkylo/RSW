@@ -40,16 +40,19 @@ for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_
 # -------------------------------------------------------------------
 def build_auth_repo_url():
     """
-    st.secrets에 등록된 REPO_URL과 TOKEN을 이용하여, 토큰이 포함된 인증 URL을 생성합니다.
-    예: "https://github.com/devkylo/RSW.git" → "https://<TOKEN>@github.com/devkylo/RSW.git"
+    st.secrets에 등록된 REPO_URL과 TOKEN을 이용하여,
+    토큰이 포함된 인증 URL을 생성합니다.
+    예: "https://github.com/devkylo/RSW.git" 
+         → "https://<TOKEN>:x-oauth-basic@github.com/devkylo/RSW.git"
     """
     repo_url = st.secrets["GITHUB"]["REPO_URL"]
     token = st.secrets["GITHUB"]["TOKEN"]
     if token:
-        auth_repo_url = repo_url.replace("https://", f"https://{token}@")
+        auth_repo_url = repo_url.replace("https://", f"https://{token}:x-oauth-basic@")
     else:
         auth_repo_url = repo_url
     return auth_repo_url
+
 
 # -------------------------------------------------------------------
 # 1) Git 저장소 초기화 및 원격 연결 (GitPython, PAT 적용)
