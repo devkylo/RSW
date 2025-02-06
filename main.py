@@ -648,23 +648,35 @@ def load_memos(memo_file_path):
             return json.load(f)
     return []
 
+
 def delete_memo_and_refresh(timestamp):
+    # 최신 GitHub 데이터를 반영합니다.
+    git_pull_changes()
+
+    # 메모 파일이 존재하면 변경 내용을 반영합니다.
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "r", encoding="utf-8") as f:
             memos_list = json.load(f)
 
+        # 삭제할 타임스탬프를 가진 메모를 제외한 목록 생성
         updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
-        with open(memo_file_path, "w", encoding="utf-8") as f:
-            json.dump(updated_memos, f, ensure_ascii=False, indent=4)
 
-            # GitHub의 최신 데이터 동기화 (pull)
-            git_pull_changes()
-            # 메모 파일 변경사항 자동 커밋 및 원격 푸시
-            git_auto_commit(memo_file_path, selected_team)
+        if updated_memos:
+            # 메모 목록이 남아 있으면 파일을 업데이트
+            with open(memo_file_path, "w", encoding="utf-8") as f:
+                json.dump(updated_memos, f, ensure_ascii=False, indent=4)
+        else:
+            # 메모가 모두 삭제되면 파일 자체를 제거
+            os.remove(memo_file_path)
 
-        st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
-        time.sleep(1)
-        st.rerun()
+    # 파일이 존재하든 없든, git_auto_commit에서 파일 존재 여부를 확인하여
+    # 존재하면 add, 없으면 remove하여 삭제 상태를 반영합니다.
+    git_auto_commit(memo_file_path, selected_team)
+
+    st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
+    time.sleep(1)
+    st.rerun()
+
 
 memos_list = load_memos(memo_file_path)
 if memos_list:
