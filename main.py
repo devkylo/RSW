@@ -80,7 +80,7 @@ def git_init_repo():
         
         # .gitignore 파일 스테이징 및 초기 커밋
         repo.index.add([gitignore_path])
-        rel_gitignore = os.path.relpath(gitignore_path, root_dir)
+        rel_gitignore = os.path.relpath(gitignore_path, schedules_root_dir)
         repo.index.add([rel_gitignore])
         repo.index.commit("Initial commit with .gitignore")
         
