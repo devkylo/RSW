@@ -184,7 +184,7 @@ def get_korea_time():
 
 def save_memo_with_reset(memo_file_path, memo_text, author=""):
     try:
-        # 메모 폴더 생성 
+        # 메모 폴더 생성
         memo_dir = os.path.dirname(memo_file_path)
         create_dir_safe(memo_dir)
         
@@ -194,14 +194,18 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
             "timestamp": get_korea_time()
         }
         
-        # 파일이 없으면 빈 리스트로 시작
+        # 파일이 있으면 내용 확인 후 JSON 로드, 없거나 비어있다면 빈 리스트로 시작
         if os.path.exists(memo_file_path):
             with open(memo_file_path, "r", encoding="utf-8") as f:
-                memos_list = json.load(f)
+                content = f.read().strip()
+                if not content:
+                    memos_list = []
+                else:
+                    memos_list = json.loads(content)
         else:
             memos_list = []
             
-        # 중복 체크    
+        # 중복 체크
         for existing_memo in memos_list:
             if (existing_memo["note"] == memo_data["note"] and
                 existing_memo["author"] == memo_data["author"] and 
