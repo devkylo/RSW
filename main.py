@@ -147,13 +147,15 @@ if 'git_initialized' not in st.session_state:
         git_init_repo(root_dir)
         try:
             repo = Repo(root_dir)
-            # --allow-unrelated-histories 옵션을 추가하여 병합
-            repo.git.pull('origin', 'main', '--allow-unrelated-histories')
+            origin = repo.remote(name='origin')
+            # 각 디렉토리별 pull 수행
+            origin.pull('origin', 'main', '--allow-unrelated-histories')
             st.toast(f"{root_dir} GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
         except GitCommandError as e:
             st.error(f"Git 동기화 오류: {e}")
     
     st.session_state.git_initialized = True
+
 
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
@@ -234,10 +236,11 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
 def save_and_reset():
     if st.session_state.new_memo_text.strip():
         save_memo_with_reset(memo_file_path,
-                             st.session_state.new_memo_text.strip(),
-                             author=st.session_state.author_name)
+                           st.session_state.new_memo_text.strip(),
+                           author=st.session_state.author_name)
         st.session_state.new_memo_text = ""
-        # 메모 파일 저장 후 Git 커밋/푸시 (루트 디렉토리: memo_root_dir 사용)
+        
+        # 메모 파일 Git 커밋
         git_auto_commit(memo_file_path, selected_team, memo_root_dir)
         st.toast("메모가 저장되었습니다!", icon="✅")
     else:
@@ -270,15 +273,43 @@ if "model_example_upload_confirmed" not in st.session_state:
     st.session_state.model_example_upload_confirmed = False
 if "model_example_upload_canceled" not in st.session_state:
     st.session_state.model_example_upload_canceled = False
+if "new_memo_text" not in st.session_state:
+    st.session_state.new_memo_text = ""
 
+# 비밀번호 입력 시 처리
 if password:
     # st.secrets의 teams 섹션에 등록된 비밀번호 사용
     correct_password = st.secrets["teams"].get(selected_team)
     if password == correct_password:
         st.session_state.admin_authenticated = True
         st.sidebar.success(f"{selected_team} 관리자 모드 활성화 ✨")
-
-        # 근무표 파일 업로드
+        
+        # ──────────────────────────────
+        # 1. 기존 범례(모델 예제) 파일을 읽어 work_mapping 미리 생성
+        # ──────────────────────────────
+        model_example_file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
+        work_mapping = {}
+        if os.path.exists(model_example_file_path):
+            try:
+                try:
+                    df_model = pd.read_csv(model_example_file_path, encoding='utf-8-sig')
+                except Exception:
+                    df_model = pd.read_csv(model_example_file_path, encoding='utf-8')
+                # 범례 파일의 형식이 올바르다면
+                if "팀 근무기호" in df_model.columns and "실제 근무" in df_model.columns:
+                    df_model = df_model.dropna(subset=["팀 근무기호", "실제 근무"])
+                    work_mapping = dict(zip(df_model["팀 근무기호"], df_model["실제 근무"]))
+                    st.sidebar.info("기존 범례 파일 로드 및 work_mapping 생성 성공")
+                else:
+                    st.sidebar.warning("기존 범례 파일 형식이 올바르지 않습니다.")
+            except Exception as e:
+                st.sidebar.error(f"기존 범례 파일 로드 오류: {e}")
+        else:
+            st.sidebar.warning("범례 파일이 업로드되어 있지 않습니다. 이후 범례 업로드 시 work_mapping이 업데이트 됩니다.")
+        
+        # ──────────────────────────────
+        # 2. 근무표 파일 업로드 및 처리 (schedules)
+        # ──────────────────────────────
         uploaded_schedule_file = st.sidebar.file_uploader(
             f"{selected_team} 근무표 파일 업로드 🔼",
             type=["xlsx", "csv"],
@@ -297,6 +328,7 @@ if password:
 
             if st.session_state.schedules_upload_confirmed:
                 try:
+                    # 파일 읽기
                     if uploaded_schedule_file.name.endswith(".xlsx"):
                         df = pd.read_excel(uploaded_schedule_file, sheet_name=0)
                     elif uploaded_schedule_file.name.endswith(".csv"):
@@ -310,11 +342,19 @@ if password:
                             except Exception:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
-
-                        # 파일 저장 및 Git 커밋/푸시
-                        df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
-                        git_auto_commit(schedules_file_path, selected_team, schedules_root_dir)
-                        st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
+                    
+                    # 근무표 CSV 파일 저장 및 Git 커밋 (schedules_root_dir)
+                    df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
+                    git_auto_commit(schedules_file_path, selected_team, schedules_root_dir)
+                    
+                    # today_schedules JSON 파일 생성 및 Git 커밋 (today_schedules_root_dir)
+                    # date_list와 today_team_folder_path는 별도 정의된 변수
+                    if work_mapping:
+                        save_monthly_schedules_to_json(date_list, today_team_folder_path, df, work_mapping)
+                    else:
+                        st.sidebar.warning("work_mapping이 정의되지 않아 today_schedules JSON 생성이 건너뜁니다.")
+                    
+                    st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
                     git_pull_changes(schedules_root_dir)
@@ -330,7 +370,9 @@ if password:
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
-        # 범례 파일 업로드
+        # ──────────────────────────────
+        # 3. 범례 파일 업로드 (모델 예제)
+        # ──────────────────────────────
         uploaded_model_example_file = st.sidebar.file_uploader(
             f"{selected_team} 범례 파일 업로드 🔼",
             type=["xlsx", "csv"],
@@ -349,24 +391,34 @@ if password:
 
             if st.session_state.model_example_upload_confirmed:
                 try:
+                    # 파일 읽기
                     if uploaded_model_example_file.name.endswith(".xlsx"):
-                        df = pd.read_excel(uploaded_model_example_file, sheet_name=0)
+                        df_model = pd.read_excel(uploaded_model_example_file, sheet_name=0)
                     elif uploaded_model_example_file.name.endswith(".csv"):
                         uploaded_model_example_file.seek(0)
                         try:
-                            df = pd.read_csv(uploaded_model_example_file, encoding='utf-8-sig')
+                            df_model = pd.read_csv(uploaded_model_example_file, encoding='utf-8-sig')
                         except Exception:
                             try:
                                 uploaded_model_example_file.seek(0)
-                                df = pd.read_csv(uploaded_model_example_file, encoding='utf-8')
+                                df_model = pd.read_csv(uploaded_model_example_file, encoding='utf-8')
                             except Exception:
                                 uploaded_model_example_file.seek(0)
-                                df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
+                                df_model = pd.read_csv(uploaded_model_example_file, encoding='cp949')
+                    
+                    # 모델 예제 CSV 파일 저장 및 Git 커밋 (model_example_root_dir)
                     file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
-                    df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                    df_model.to_csv(file_path, index=False, encoding='utf-8-sig')
                     git_auto_commit(file_path, selected_team, model_example_root_dir)
                     st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
-
+                    
+                    # work_mapping 업데이트
+                    if "팀 근무기호" in df_model.columns and "실제 근무" in df_model.columns:
+                        df_model = df_model.dropna(subset=["팀 근무기호", "실제 근무"])
+                        work_mapping = dict(zip(df_model["팀 근무기호"], df_model["실제 근무"]))
+                        st.sidebar.info("work_mapping이 성공적으로 업데이트되었습니다.")
+                    else:
+                        st.sidebar.warning("범례 파일의 형식이 올바르지 않아 work_mapping 업데이트 실패")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
                     git_pull_changes(model_example_root_dir)
@@ -382,8 +434,29 @@ if password:
                         git_pull_changes(model_example_root_dir)
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
+        
+        # ──────────────────────────────
+        # 4. 메모 등록 섹션 (텍스트 입력 기반)
+        # ──────────────────────────────
+        st.sidebar.subheader("메모 등록")
+        memo_text = st.sidebar.text_area("메모 입력", key="new_memo_text")
+        if st.sidebar.button("메모 저장", key="save_memo"):
+            if memo_text.strip():
+                try:
+                    # save_memo_with_reset는 memo_file_path에 메모를 저장하는 함수임
+                    save_memo_with_reset(memo_file_path, memo_text.strip(), author=selected_team)
+                    git_auto_commit(memo_file_path, selected_team, memo_root_dir)
+                    st.sidebar.success("메모가 저장되었습니다!")
+                    st.session_state.new_memo_text = ""
+                except Exception as e:
+                    st.sidebar.error(f"메모 저장 중 오류 발생: {e}")
+                    git_pull_changes(memo_root_dir)
+            else:
+                st.sidebar.warning("빈 메모는 저장할 수 없습니다!")
     else:
         st.sidebar.error("❌ 비밀번호 오류 ❌")
+else:
+    st.sidebar.info("비밀번호를 입력하세요.")
 
 st.sidebar.markdown("🙋 :blue[문의 : 관제SO팀]")
 
@@ -499,40 +572,36 @@ try:
         def save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping):
             for date in date_list:
                 month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
-                if not os.path.exists(month_folder):
-                    os.mkdir(month_folder)
+                create_dir_safe(month_folder)  # 월별 폴더 생성
+                
                 json_file_path = os.path.join(month_folder, f"{date.strftime('%Y-%m-%d')}_schedule.json")
                 today_column = f"{date.day}({['월','화','수','목','금','토','일'][date.weekday()]})"
+                
                 if today_column in df_schedule.columns:
                     df_schedule["근무 형태"] = df_schedule[today_column].map(work_mapping).fillna("")
+                    
+                    # 주간/야간/휴가 근무자 데이터 생성
                     day_shift = df_schedule[df_schedule["근무 형태"].str.contains("주", na=False)].copy()
-                    day_shift_data = day_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
-
                     night_shift = df_schedule[df_schedule["근무 형태"].str.contains("야", na=False)].copy()
-                    night_shift_data = night_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
-
-                    vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
+                    vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차","숙/연차"]
                     vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
-                    vacation_shift_data = vacation_shift[["파트 구분", "이름", today_column]].rename(
-                        columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
-
+                    
                     schedule_data = {
                         "date": date.strftime('%Y-%m-%d'),
-                        "day_shift": day_shift_data,
-                        "night_shift": night_shift_data,
-                        "vacation_shift": vacation_shift_data
+                        "day_shift": day_shift[["파트 구분", "이름", today_column]].rename(
+                            columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records"),
+                        "night_shift": night_shift[["파트 구분", "이름", today_column]].rename(
+                            columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records"),
+                        "vacation_shift": vacation_shift[["파트 구분", "이름", today_column]].rename(
+                            columns={"파트 구분": "파트", today_column: "근무"}).to_dict(orient="records")
                     }
-                else:
-                    schedule_data = {
-                        "date": date.strftime('%Y-%m-%d'),
-                        "day_shift": [],
-                        "night_shift": [],
-                        "vacation_shift": []
-                    }
-                with open(json_file_path, "w", encoding="utf-8") as json_file:
-                    json.dump(schedule_data, json_file, ensure_ascii=False, indent=4)
+                    
+                    # JSON 파일 저장
+                    with open(json_file_path, "w", encoding="utf-8") as json_file:
+                        json.dump(schedule_data, json_file, ensure_ascii=False, indent=4)
+                    
+                    # Git에 커밋
+                    git_auto_commit(json_file_path, selected_team, today_schedules_root_dir)
 
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
 
