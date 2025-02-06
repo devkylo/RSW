@@ -91,9 +91,6 @@ def git_init_repo():
 # 2) 변경사항 자동 커밋 및 푸시 함수
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
-    """
-    파일 저장 후 자동 커밋 및 원격 푸시 (현재 HEAD 기준으로 main 브랜치에 푸시)
-    """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
         repo = Repo(schedules_root_dir)
@@ -103,6 +100,8 @@ def git_auto_commit(file_path, team_name):
         # 로컬 브랜치를 강제로 "main"으로 변경
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
+        # 원격 URL을 재설정하여 인증 정보가 포함되도록 함
+        origin.set_url(build_auth_repo_url())
         # HEAD 기준으로 원격 main 브랜치에 push
         origin.push("HEAD:refs/heads/main")
         st.toast(f"파일이 성공적으로 업로드되었습니다: {file_path}", icon="✅")
