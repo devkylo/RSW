@@ -11,6 +11,7 @@ from collections import defaultdict
 from urllib.parse import unquote
 from git import Repo, GitCommandError
 import subprocess
+from git.exc import InvalidGitRepositoryError
 
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
