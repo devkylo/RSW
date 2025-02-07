@@ -247,8 +247,6 @@ def save_and_reset():
     if st.session_state.new_memo_text.strip():
         # memo_root_dir에 한하여 pull 수행
         git_pull_changes_submodule(memo_root_dir, st.secrets["GITHUB"]["REPO_URL_MEMO"])
-
-        memo_file_path = os.path.join(memo_root_dir, selected_team, "memo.json")
         
         if save_memo_with_reset(memo_file_path,
                                   st.session_state.new_memo_text.strip(),
@@ -316,8 +314,6 @@ if password:
 
             if st.session_state.schedules_upload_confirmed:
                 try:
-                    # team_schedules 서브 모듈 최신화 (pull)
-                    git_pull_changes_submodule(schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
                     if uploaded_schedule_file.name.endswith(".xlsx"):
                         df = pd.read_excel(uploaded_schedule_file, sheet_name=0)
                     elif uploaded_schedule_file.name.endswith(".csv"):
@@ -343,14 +339,10 @@ if password:
                     st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
+                    git_pull_changes_submodule(schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
             elif st.session_state.schedules_upload_canceled:
                 file_path = schedules_file_path
                 try:
-                    # team_schedules 서브 모듈 최신화 (pull)
-                    git_pull_changes_submodule(schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
-
-                    file_path = os.path.join(schedules_root_dir, selected_team, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
-
                     # 파일이 있으면 삭제; 없으면 그냥 넘어감
                     if os.path.exists(file_path):
                         os.remove(file_path)
@@ -359,6 +351,7 @@ if password:
                     st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
+                    git_pull_changes_submodule(schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
@@ -535,51 +528,53 @@ try:
             st.warning(f"선택한 날짜 ({today_column})에 해당하는 데이터가 없습니다.")
 
         def save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping):
-            created_files = []
-            
+            created_files = []  # 생성된 JSON 파일 경로를 저장하는 리스트
             for date in date_list:
-                month_folder = os.path.join(today_team_folder_path, selected_team, date.strftime('%Y-%m'))
-                os.makedirs(month_folder, exist_ok=True)
                 
+                month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
+                if not os.path.exists(month_folder):
+                    os.makedirs(month_folder, exist_ok=True)
                 json_file_path = os.path.join(month_folder, f"{date.strftime('%Y-%m-%d')}_schedule.json")
-                
                 today_column = f"{date.day}({['월','화','수','목','금','토','일'][date.weekday()]})"
-                
                 if today_column in df_schedule.columns:
                     df_schedule["근무 형태"] = df_schedule[today_column].map(work_mapping).fillna("")
-                    
                     day_shift = df_schedule[df_schedule["근무 형태"].str.contains("주", na=False)].copy()
+                    day_shift_data = day_shift[["파트 구분", "이름", today_column]].rename(
+                        columns={"파트 구분": "파트", today_column: "근무"}
+                    ).to_dict(orient="records")
+
                     night_shift = df_schedule[df_schedule["근무 형태"].str.contains("야", na=False)].copy()
-                    vacation_shift = df_schedule[df_schedule[today_column].isin(
-                        ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
-                    )].copy()
-                    
+                    night_shift_data = night_shift[["파트 구분", "이름", today_column]].rename(
+                        columns={"파트 구분": "파트", today_column: "근무"}
+                    ).to_dict(orient="records")
+
+                    vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
+                    vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
+                    vacation_shift_data = vacation_shift[["파트 구분", "이름", today_column]].rename(
+                        columns={"파트 구분": "파트", today_column: "근무"}
+                    ).to_dict(orient="records")
+
                     schedule_data = {
                         "date": date.strftime('%Y-%m-%d'),
-                        "day_shift": day_shift[["파트 구분", "이름", today_column]].rename(
-                            columns={"파트 구분": "파트", today_column: "근무"}
-                        ).to_dict(orient="records"),
-                        "night_shift": night_shift[["파트 구분", "이름", today_column]].rename(
-                            columns={"파트 구분": "파트", today_column: "근무"}
-                        ).to_dict(orient="records"),
-                        "vacation_shift": vacation_shift[["파트 구분", "이름", today_column]].rename(
-                            columns={"파트 구분": "파트", today_column: "근무"}
-                        ).to_dict(orient="records")
+                        "day_shift": day_shift_data,
+                        "night_shift": night_shift_data,
+                        "vacation_shift": vacation_shift_data
                     }
-                    
-                    with open(json_file_path, "w", encoding="utf-8") as f:
-                        json.dump(schedule_data, f, ensure_ascii=False, indent=4)
-                    
-                    created_files.append(json_file_path)
+                else:
+                    schedule_data = {
+                        "date": date.strftime('%Y-%m-%d'),
+                        "day_shift": [],
+                        "night_shift": [],
+                        "vacation_shift": []
+                    }
+                with open(json_file_path, "w", encoding="utf-8") as json_file:
+                    json.dump(schedule_data, json_file, ensure_ascii=False, indent=4)
+                created_files.append(json_file_path)
             
-            # team_today_schedules 서브 모듈 최신화 (pull 후 각각 commit/push)
-            git_pull_changes_submodule(today_schedules_root_dir,
-                                    st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"])
+            # GitHub와 동기화: 원격 변경사항을 pull한 후 생성된 파일들을 개별 커밋 및 푸시
+            git_pull_changes_submodule(today_schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"])
             for file_path in created_files:
-                git_auto_commit_submodule(file_path,
-                                        selected_team,
-                                        today_schedules_root_dir,
-                                        st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"])
+                git_auto_commit_submodule(file_path, selected_team, today_schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"])
 
         # 함수 실행 예시
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
@@ -693,33 +688,25 @@ def load_memos(memo_file_path):
     return []
 
 def delete_memo_and_refresh(timestamp):
-    try:
-        # team_memo 서브 모듈 최신화 (pull)
-        git_pull_changes_submodule(memo_root_dir, st.secrets["GITHUB"]["REPO_URL_MEMO"])
-        
-        memo_file_path = os.path.join(memo_root_dir, selected_team, "memo.json")
-        
-        if os.path.exists(memo_file_path):
-            with open(memo_file_path, "r", encoding="utf-8") as f:
-                memos_list = json.load(f)
-            
-            updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
-            
-            if updated_memos:
-                with open(memo_file_path, "w", encoding="utf-8") as f:
-                    json.dump(updated_memos, f, ensure_ascii=False, indent=4)
-            else:
-                os.remove(memo_file_path)  # 모든 메모가 삭제되면 파일도 삭제
-            
-            # 변경된 메모 파일만 커밋 및 푸시
-            git_auto_commit_submodule(memo_file_path, selected_team,
-                                      memo_root_dir,
-                                      st.secrets["GITHUB"]["REPO_URL_MEMO"])
-            st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
-            time.sleep(1)
-            st.rerun()
-    except Exception as e:
-        st.error(f"메모 삭제 중 오류 발생: {e}")
+    if not st.session_state.get("admin_authenticated", False):
+        return
+
+    git_pull_changes_submodule(memo_root_dir, st.secrets["GITHUB"]["REPO_URL_MEMO"])
+
+    if os.path.exists(memo_file_path):
+        with open(memo_file_path, "r", encoding="utf-8") as f:
+            memos_list = json.load(f)
+        updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
+        if updated_memos:
+            with open(memo_file_path, "w", encoding="utf-8") as f:
+                json.dump(updated_memos, f, ensure_ascii=False, indent=4)
+        else:
+            os.remove(memo_file_path)
+    
+    git_auto_commit_submodule(memo_file_path, selected_team, memo_root_dir, st.secrets["GITHUB"]["REPO_URL_MEMO"])
+    st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
+    time.sleep(1)
+    st.rerun()
 
 
 memos_list = load_memos(memo_file_path)
