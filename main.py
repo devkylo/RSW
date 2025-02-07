@@ -12,9 +12,11 @@ from urllib.parse import unquote
 from cryptography.fernet import Fernet
 from git import Repo, GitCommandError
 import subprocess
+import threading
 
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
+git_lock = threading.Lock()
 
 # -------------------------------------------------------------------
 # Git 사용자 정보 강제 재설정 함수
@@ -147,6 +149,16 @@ def git_push_changes():
     except GitCommandError as e:
         st.error(f"Git push 오류: {e}")
 
+# -------------------------------------------------------------------
+# Git 동시 작업 제어
+# -------------------------------------------------------------------
+def safe_git_push_changes():
+    with git_lock:
+        git_push_changes()  # 원래의 push 함수를 호출
+
+def safe_git_pull_changes():
+    with git_lock:
+        git_pull_changes()  # 원래의 pull 함수를 호출
 # -------------------------------------------------------------------
 # Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
 # -------------------------------------------------------------------
