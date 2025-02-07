@@ -333,17 +333,15 @@ if password:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
                     git_pull_changes()
             elif st.session_state.schedules_upload_canceled:
-                file_path = os.path.join(schedules_file_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
                 try:
-                    # 파일이 있으면 삭제; 없으면 그냥 넘어감
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                    # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
-                    git_auto_commit(file_path, selected_team)
+                    if os.path.exists(schedules_file_path):
+                        os.remove(schedules_file_path)
+                    git_auto_commit(schedules_file_path, selected_team)
                     st.sidebar.warning(f"{selected_team} 근무표 업로드 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
                     git_pull_changes()
+
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
