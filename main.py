@@ -12,11 +12,11 @@ from urllib.parse import unquote
 from cryptography.fernet import Fernet
 from git import Repo, GitCommandError
 import subprocess
-#import threading
+import threading
 
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
-#git_lock = threading.Lock()
+git_lock = threading.Lock()
 
 # -------------------------------------------------------------------
 # Git 사용자 정보 강제 재설정 함수
@@ -152,13 +152,13 @@ def git_push_changes():
 # -------------------------------------------------------------------
 # Git 동시 작업 제어
 # -------------------------------------------------------------------
-#def safe_git_push_changes():
-    #with git_lock:
-        #git_push_changes()  # 원래의 push 함수를 호출
+def safe_git_push_changes():
+    with git_lock:
+        git_push_changes()  # 원래의 push 함수를 호출
 
-#def safe_git_pull_changes():
-    #with git_lock:
-        #git_pull_changes()  # 원래의 pull 함수를 호출
+def safe_git_pull_changes():
+    with git_lock:
+        git_pull_changes()  # 원래의 pull 함수를 호출
 # -------------------------------------------------------------------
 # Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
 # -------------------------------------------------------------------
@@ -316,7 +316,7 @@ if password:
             # 원격 저장소 동기화(push, pull 등 필요한 동작을 실행)
             git_push_changes()
             git_pull_changes()
-            st.success("GitHub에서 최신 데이터 동기화 완료! 🔄")
+            st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
             st.session_state.auto_sync_enabled = False
 
         # 근무표 파일 업로드
