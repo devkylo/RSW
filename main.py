@@ -119,7 +119,8 @@ def git_auto_commit(file_path, team_name):
         origin = repo.remote(name='origin')
         # 최신 PAT가 포함된 URL로 재설정 후 push
         origin.set_url(build_auth_repo_url())
-        origin.push("HEAD:refs/heads/main")
+        if st.session_state.get("auto_sync_enabled", False):
+            origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
 
@@ -291,6 +292,8 @@ if password:
         st.sidebar.success(f"{selected_team} 관리자 모드 활성화 ✨")
         # 사이드바에 동기화 버튼 추가 (원하는 위치에 배치)
         if st.sidebar.button("🔄 GitHub 동기화 🔄"):
+            st.session_state.auto_sync_enabled = True
+            # 원격 저장소 동기화(push, pull 등 필요한 동작을 실행
             git_pull_changes()
             st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
 
