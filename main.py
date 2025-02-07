@@ -257,7 +257,6 @@ def save_and_reset():
                               author=st.session_state.author_name):
                              
             try:
-                # Git에 변경사항 커밋 및 푸시
                 git_auto_commit(memo_file_path, selected_team)
                 st.session_state.new_memo_text = ""
                 st.toast("메모가 저장되었습니다!", icon="✅")
@@ -305,6 +304,7 @@ if password:
             # 원격 저장소 동기화(push, pull 등 필요한 동작을 실행)
             git_push_changes()
             git_pull_changes()
+            st.session_state.auto_sync_enabled = False
             st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
 
         # 근무표 파일 업로드
