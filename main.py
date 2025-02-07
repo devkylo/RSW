@@ -12,7 +12,6 @@ from urllib.parse import unquote
 from git import Repo, GitCommandError
 import subprocess
 
-
 # -------------------------------------------------------------------
 # 기본 환경 설정 및 Git 사용자 정보 재설정
 # -------------------------------------------------------------------
@@ -53,7 +52,7 @@ for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_
 # -------------------------------------------------------------------
 def git_init_submodule(submodule_path, remote_url):
     """
-    만약 해당 폴더가 Git 저장소가 아니라면 초기화하고 원격(remote)을 연결합니다.
+    폴더가 Git 저장소가 아니라면 초기화하고 원격(remote)을 연결합니다.
     """
     if not os.path.exists(os.path.join(submodule_path, ".git")):
         repo = Repo.init(submodule_path, initial_branch="main")
@@ -61,11 +60,13 @@ def git_init_submodule(submodule_path, remote_url):
         with repo.config_writer() as config:
             config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
             config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
-        # 기본 파일(.gitkeep) 커밋
+        # 기본 파일(.gitkeep) 생성 및 커밋
         gitkeep_path = os.path.join(submodule_path, ".gitkeep")
         with open(gitkeep_path, "w") as f:
             f.write("")
-        repo.index.add([gitkeep_path])
+        # 절대경로 대신 작업 디렉토리 기준 상대경로 전달
+        gitkeep_relpath = os.path.relpath(gitkeep_path, submodule_path)
+        repo.index.add([gitkeep_relpath])
         repo.index.commit("Initial commit in submodule")
         repo.git.branch("-M", "main")
 
@@ -671,7 +672,7 @@ def delete_memo_and_refresh(timestamp):
         else:
             os.remove(memo_file_path)
     
-    git_auto_commit_submodule(memo_file_path, selected_team, memo_root_dir, st.secrets["GITHUB"])
+    git_auto_commit_submodule(memo_file_path, selected_team, memo_root_dir, st.secrets["GITHUB"]["REPO_URL_MEMO"])
     st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
     time.sleep(1)
     st.rerun()
