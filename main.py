@@ -141,7 +141,6 @@ def git_pull_changes():
 # -------------------------------------------------------------------
 if 'git_initialized' not in st.session_state:
     git_init_repo()
-    #git_pull_changes()
     st.session_state.git_initialized = True
 
 # -------------------------------------------------------------------
@@ -240,8 +239,6 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
 
 def save_and_reset():
     if st.session_state.new_memo_text.strip():
-        # GitHub 최신 데이터 동기화
-        git_pull_changes()
        
         # 메모 저장 시도
         if save_memo_with_reset(memo_file_path,
@@ -331,7 +328,6 @@ if password:
                     st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-                    git_pull_changes()
             elif st.session_state.schedules_upload_canceled:
                 try:
                     if os.path.exists(schedules_file_path):
@@ -340,7 +336,6 @@ if password:
                     st.sidebar.warning(f"{selected_team} 근무표 업로드 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                    git_pull_changes()
 
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
@@ -383,7 +378,6 @@ if password:
                     st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-                    git_pull_changes()
             elif st.session_state.model_example_upload_canceled:
                 file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                 try:
@@ -395,11 +389,15 @@ if password:
                     st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                    git_pull_changes()
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
     else:
         st.sidebar.error("❌ 비밀번호 오류 ❌")
+    # 사이드바에 동기화 버튼 추가 (원하는 위치에 배치)
+
+        if st.sidebar.button("GitHub 동기화 🔄"):
+            git_pull_changes()
+            st.sidebar.success("🔄 동기화 완료 🔄")
 
 st.sidebar.markdown("🙋 :blue[문의 : 관제SO팀]")
 
@@ -555,8 +553,6 @@ try:
                     json.dump(schedule_data, json_file, ensure_ascii=False, indent=4)
                 created_files.append(json_file_path)
            
-            # GitHub와 동기화: 원격 변경사항을 pull한 후 생성된 파일들을 개별 커밋 및 푸시
-            git_pull_changes()
             for file_path in created_files:
                 git_auto_commit(file_path, selected_team)
 
@@ -677,9 +673,6 @@ def delete_memo_and_refresh(timestamp):
     if not st.session_state.get("admin_authenticated", False):
         #st.error("메모 삭제는 관리자 전용 기능입니다.")
         return
-
-    # 최신 GitHub 데이터를 반영합니다.
-    git_pull_changes()
 
     # 메모 파일이 존재하면 변경 내용을 반영합니다.
     if os.path.exists(memo_file_path):
