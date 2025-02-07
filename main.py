@@ -104,7 +104,14 @@ def git_auto_commit_submodule(file_path, team_name, submodule_path, remote_url):
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
         repo = Repo(submodule_path)
+        # 상대 경로 계산 시 submodule_path 기준으로 계산
         relative_path = os.path.relpath(file_path, submodule_path)
+        
+        # 파일이 위치할 팀 폴더 경로 생성
+        team_folder = os.path.dirname(file_path)
+        if not os.path.exists(team_folder):
+            os.makedirs(team_folder, exist_ok=True)
+            
         if os.path.exists(file_path):
             repo.index.add([relative_path])
         else:
@@ -112,10 +119,10 @@ def git_auto_commit_submodule(file_path, team_name, submodule_path, remote_url):
                 repo.index.remove([relative_path])
             except Exception:
                 pass
+                
         repo.index.commit(commit_message)
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        # 토큰이 적용된 원격 URL로 변경하여 push (비대화형 환경에서 인증 문제 회피)
         origin.set_url(_inject_token(remote_url))
         origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
@@ -199,8 +206,9 @@ def get_korea_time():
 def save_memo_with_reset(memo_file_path, memo_text, author=""):
     try:
         # 메모 폴더 생성
-        memo_dir = os.path.dirname(memo_file_path)
-        create_dir_safe(memo_dir)
+        memo_team_folder = os.path.dirname(memo_file_path)
+        if not os.path.exists(memo_team_folder):
+            os.makedirs(memo_team_folder, exist_ok=True)
         
         memo_data = {
             "note": memo_text,
@@ -212,10 +220,7 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
         if os.path.exists(memo_file_path):
             with open(memo_file_path, "r", encoding="utf-8") as f:
                 content = f.read().strip()
-                if not content:
-                    memos_list = []
-                else:
-                    memos_list = json.loads(content)
+                memos_list = [] if not content else json.loads(content)
         else:
             memos_list = []
             
@@ -323,9 +328,13 @@ if password:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
 
+                    team_folder_path = os.path.join(schedules_root_dir, selected_team)
+                    if not os.path.exists(team_folder_path):
+                        os.makedirs(team_folder_path, exist_ok=True)
+
                     # 파일 저장 및 Git 커밋/푸시
-                    schedules_file_path = os.path.join(schedules_root_dir, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
-                    df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
+                    file_path = os.path.join(team_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
+                    df.to_csv(file_path, index=False, encoding='utf-8-sig')
                     git_auto_commit_submodule(schedules_file_path, selected_team, schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
                     st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
@@ -378,7 +387,12 @@ if password:
                             except Exception:
                                 uploaded_model_example_file.seek(0)
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
-                    file_path = os.path.join(model_example_root_dir, f"{selected_team}_model_example.csv")
+
+                    team_folder_path = os.path.join(model_example_root_dir, selected_team)
+                    if not os.path.exists(team_folder_path):
+                            os.makedirs(team_folder_path, exist_ok=True)
+
+                    file_path = os.path.join(team_folder_path, f"{selected_team}_model_example.csv")
                     df.to_csv(file_path, index=False, encoding='utf-8-sig')
                     git_auto_commit_submodule(file_path, selected_team, model_example_root_dir, st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"])
                     st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
@@ -516,9 +530,10 @@ try:
         def save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping):
             created_files = []  # 생성된 JSON 파일 경로를 저장하는 리스트
             for date in date_list:
+                
                 month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
                 if not os.path.exists(month_folder):
-                    os.mkdir(month_folder)
+                    os.makedirs(month_folder, exist_ok=True)
                 json_file_path = os.path.join(month_folder, f"{date.strftime('%Y-%m-%d')}_schedule.json")
                 today_column = f"{date.day}({['월','화','수','목','금','토','일'][date.weekday()]})"
                 if today_column in df_schedule.columns:
