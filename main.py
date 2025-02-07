@@ -340,7 +340,7 @@ if password:
                         os.remove(file_path)
                     # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
                     git_auto_commit(file_path, selected_team)
-                    st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
+                    st.sidebar.warning(f"{selected_team} 근무표 업로드 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
                     git_pull_changes()
