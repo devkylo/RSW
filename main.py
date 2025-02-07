@@ -127,10 +127,10 @@ def git_auto_commit(file_path, team_name):
 # 3) 원격 저장소의 최신 변경사항 동기화 (pull)
 # -------------------------------------------------------------------
 def git_pull_changes():
-    """원격 저장소의 최신 변경사항 동기화 (main 브랜치)"""
     try:
         repo = Repo(repo_root)
         origin = repo.remote(name='origin')
+        origin.set_url(build_auth_repo_url())  # 최신 인증 URL 반영
         origin.pull("main")
         #st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
     except GitCommandError as e:
