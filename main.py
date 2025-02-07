@@ -11,43 +11,32 @@ from collections import defaultdict
 from urllib.parse import unquote
 from git import Repo, GitCommandError
 import subprocess
-from git.exc import InvalidGitRepositoryError
 
 
-
-os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
 # -------------------------------------------------------------------
-# Git 사용자 정보 강제 재설정 함수
+# 기본 환경 설정 및 Git 사용자 정보 재설정
 # -------------------------------------------------------------------
+os.environ["GIT_OPTIONAL_LOCKS"] = "0"  # index.lock 관련 오류 해지
+
 def reset_git_config():
     subprocess.run(['git', 'config', '--global', 'user.name', st.secrets["GITHUB"]["USER_NAME"]])
     subprocess.run(['git', 'config', '--global', 'user.email', st.secrets["GITHUB"]["USER_EMAIL"]])
 
 reset_git_config()
-# -------------------------------------------------------------------
-# 기본 설정
-# -------------------------------------------------------------------
-#repo_root = "."  # 저장소 루트 (프로젝트 루트)
-korea_tz = pytz.timezone("Asia/Seoul")
 
 # -------------------------------------------------------------------
-# 서브모듈 디렉토리 경로 설정 (각 폴더는 개별 서브 저장소로 관리됨)
+# 기본 설정 및 서브 모듈(각각 독립 저장소) 폴더 경로 지정
 # -------------------------------------------------------------------
+#repo_root = "."  # 필요시 사용 (메인 저장소)
+korea_tz = pytz.timezone("Asia/Seoul")
+
 schedules_root_dir       = "team_schedules"
 model_example_root_dir   = "team_model_example"
 today_schedules_root_dir = "team_today_schedules"
 memo_root_dir            = "team_memo"
 
-# 서브모듈 디렉토리 목록
-submodule_dirs = [
-    schedules_root_dir,
-    model_example_root_dir,
-    today_schedules_root_dir,
-    memo_root_dir
-]
-
 # -------------------------------------------------------------------
-# 디렉토리 생성 함수: 지정한 경로가 없으면 디렉토리(및 .gitkeep 파일) 생성
+# 디렉토리 생성 함수 (경로가 없으면 생성)
 # -------------------------------------------------------------------
 def create_dir_safe(path):
     if not os.path.exists(path):
@@ -56,83 +45,87 @@ def create_dir_safe(path):
         with open(gitkeep_path, "w") as f:
             f.write("")
 
-# 기본 서브모듈 폴더부터 생성
-for folder in submodule_dirs:
+for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
     create_dir_safe(folder)
 
 # -------------------------------------------------------------------
-# GitHub 인증 URL 생성 함수
+# ★ 서브 모듈 관련 Git 함수 ★
 # -------------------------------------------------------------------
-def build_auth_repo_url(repo_url):
-    token = st.secrets["GITHUB"]["TOKEN"]
-    if token:
-        return repo_url.replace("https://", f"https://{token}:x-oauth-basic@")
-    else:
-        return repo_url
+def git_init_submodule(submodule_path, remote_url):
+    """
+    만약 해당 폴더가 Git 저장소가 아니라면 초기화하고 원격(remote)을 연결합니다.
+    """
+    if not os.path.exists(os.path.join(submodule_path, ".git")):
+        repo = Repo.init(submodule_path, initial_branch="main")
+        repo.create_remote('origin', remote_url)
+        with repo.config_writer() as config:
+            config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
+            config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
+        # 기본 파일(.gitkeep) 커밋
+        gitkeep_path = os.path.join(submodule_path, ".gitkeep")
+        with open(gitkeep_path, "w") as f:
+            f.write("")
+        repo.index.add([gitkeep_path])
+        repo.index.commit("Initial commit in submodule")
+        repo.git.branch("-M", "main")
 
-# 각 서브모듈별 원격 저장소 URL 매핑 (st.secrets에 등록되어 있어야 함)
-repo_url_mapping = st.secrets["GITHUB"].get("REPO_URL_MAPPING", {
-    schedules_root_dir:       st.secrets["GITHUB"]["REPO_URL_SCHEDULES"],
-    model_example_root_dir:   st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"],
-    today_schedules_root_dir: st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"],
-    memo_root_dir:            st.secrets["GITHUB"]["REPO_URL_MEMO"],
-})
-# -------------------------------------------------------------------
-# [1] 서브 저장소별 Git 자동 커밋 및 푸시 함수 (파일이 존재하지 않을 경우 remove 처리)
-# -------------------------------------------------------------------
-def git_auto_commit_submodule(file_path, team_name):
-    file_path_abs = os.path.abspath(file_path)
-    submodule_folder = None
-    # 서브모듈 폴더(절대경로) 내부에 파일이 포함되는지 확인
-    for folder in submodule_dirs:
-        folder_abs = os.path.abspath(folder)
-        if file_path_abs.startswith(folder_abs):
-            submodule_folder = folder_abs
-            break
-    if not submodule_folder:
-        st.error("해당 파일은 어떤 서브 저장소에도 속하지 않습니다.")
-        return
+def git_pull_changes_submodule(submodule_path, remote_url):
+    """
+    지정한 서브 모듈 폴더에서 원격 저장소(main 브랜치)를 pull 합니다.
+    """
+    try:
+        repo = Repo(submodule_path)
+        origin = repo.remote(name='origin')
+        origin.set_url(remote_url)
+        origin.pull("main")
+        # st.toast(f"{submodule_path} 동기화 완료!", icon="🔄")
+    except GitCommandError as e:
+        st.error(f"{submodule_path} Git 동기화 오류: {e}")
 
+def git_auto_commit_submodule(file_path, team_name, submodule_path, remote_url):
+    """
+    지정한 서브 모듈 내 파일에 대해 자동 add, commit, 그리고 push를 수행합니다.
+    """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        repo = Repo(submodule_folder, search_parent_directories=True)
-        relative_path = os.path.relpath(file_path, submodule_folder)
+        repo = Repo(submodule_path)
+        relative_path = os.path.relpath(file_path, submodule_path)
         if os.path.exists(file_path):
             repo.index.add([relative_path])
         else:
             try:
                 repo.index.remove([relative_path])
-            except Exception as remove_err:
-                st.warning(f"Git remove 처리 시 문제 발생: {remove_err}")
+            except Exception:
+                pass
         repo.index.commit(commit_message)
+        repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        auth_url = build_auth_repo_url(repo_url_mapping[submodule_folder])
-        origin.set_url(auth_url)
+        origin.set_url(remote_url)
         origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
-        st.error(f"서브 저장소 '{submodule_folder}' Git 작업 오류: {e}")
+        st.error(f"{submodule_path} Git 작업 오류: {e}")
+
+def init_all_submodules():
+    """
+    모든 서브 모듈 폴더에 대해 초기화 및 원격 동기화를 수행합니다.
+    """
+    submodules = [
+        (schedules_root_dir,       st.secrets["GITHUB"]["REPO_URL_SCHEDULES"]),
+        (model_example_root_dir,   st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"]),
+        (today_schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"]),
+        (memo_root_dir,            st.secrets["GITHUB"]["REPO_URL_MEMO"])
+    ]
+    for path, url in submodules:
+        create_dir_safe(path)
+        git_init_submodule(path, url)
+        git_pull_changes_submodule(path, url)
 
 # -------------------------------------------------------------------
-# [2] 서브 저장소별 원격 동기화(pull) 함수
+# 한 번만 서브 모듈 초기화 및 동기화 실행 (세션 상태 이용)
 # -------------------------------------------------------------------
-def git_pull_submodule(submodule_folder):
-    if not os.path.isdir(submodule_folder):
-        print(f"Git 서브 저장소 폴더 '{submodule_folder}'가 존재하지 않습니다.")
-        return None
-    try:
-        repo = Repo(submodule_folder, search_parent_directories=True)
-    except InvalidGitRepositoryError:
-        print(f"폴더 '{submodule_folder}'는 유효한 Git 저장소가 아닙니다. 새 저장소를 초기화합니다.")
-        repo = Repo.init(submodule_folder)
-    try:
-        if repo.remotes:
-            print("Git pull 실행 중...")
-            repo.remotes.origin.pull()
-        else:
-            print("원격 저장소가 설정되어 있지 않습니다.")
-    except Exception as e:
-        print("Git pull 중 오류 발생:", e)
-    return repo
+if 'git_initialized' not in st.session_state:
+    init_all_submodules()
+    st.session_state.git_initialized = True
 
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
@@ -231,14 +224,14 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
 def save_and_reset():
     if st.session_state.new_memo_text.strip():
         # memo_root_dir에 한하여 pull 수행
-        git_pull_submodule(memo_root_dir)
+        git_pull_changes_submodule(memo_root_dir, st.secrets["GITHUB"]["REPO_URL_MEMO"])
         
         if save_memo_with_reset(memo_file_path,
                                   st.session_state.new_memo_text.strip(),
                                   author=st.session_state.author_name):
             try:
                 # memo 파일에 대해서만 서브모듈 Git commit/push 수행
-                git_auto_commit_submodule(memo_file_path, selected_team)
+                git_auto_commit_submodule(memo_file_path, selected_team, memo_root_dir, st.secrets["GITHUB"]["REPO_URL_MEMO"])
                 st.session_state.new_memo_text = ""
                 st.toast("메모가 저장되었습니다!", icon="✅")
             except Exception as e:
@@ -314,12 +307,13 @@ if password:
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
 
                     # 파일 저장 및 Git 커밋/푸시
+                    schedules_file_path = os.path.join(schedules_root_dir, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
                     df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
-                    git_auto_commit_submodule(schedules_file_path, selected_team)
+                    git_auto_commit_submodule(schedules_file_path, selected_team, schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
                     st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-                    git_pull_submodule(schedules_root_dir)
+                    git_pull_changes_submodule(schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
             elif st.session_state.schedules_upload_canceled:
                 file_path = schedules_file_path
                 try:
@@ -327,11 +321,11 @@ if password:
                     if os.path.exists(file_path):
                         os.remove(file_path)
                     # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
-                    git_auto_commit_submodule(file_path, selected_team)
+                    git_auto_commit_submodule(schedules_file_path, selected_team, schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
                     st.sidebar.warning(f"{selected_team} 근무표 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                    git_pull_submodule(schedules_root_dir)
+                    git_pull_changes_submodule(schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_SCHEDULES"])
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
@@ -367,13 +361,13 @@ if password:
                             except Exception:
                                 uploaded_model_example_file.seek(0)
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
-                    file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
+                    file_path = os.path.join(model_example_root_dir, f"{selected_team}_model_example.csv")
                     df.to_csv(file_path, index=False, encoding='utf-8-sig')
-                    git_auto_commit_submodule(file_path, selected_team)
+                    git_auto_commit_submodule(file_path, selected_team, model_example_root_dir, st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"])
                     st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
-                    git_pull_submodule(model_example_root_dir)
+                    git_pull_changes_submodule(model_example_root_dir, st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"])
             elif st.session_state.model_example_upload_canceled:
                 file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                 try:
@@ -381,11 +375,11 @@ if password:
                     if os.path.exists(file_path):
                         os.remove(file_path)
                     # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
-                    git_auto_commit_submodule(file_path, selected_team)
+                    git_auto_commit_submodule(file_path, selected_team, model_example_root_dir, st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"])
                     st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                    git_pull_submodule(model_example_root_dir)
+                    git_pull_changes_submodule(model_example_root_dir, st.secrets["GITHUB"]["REPO_URL_MODEL_EXAMPLE"])
                 else:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
     else:
@@ -546,9 +540,9 @@ try:
                 created_files.append(json_file_path)
             
             # GitHub와 동기화: 원격 변경사항을 pull한 후 생성된 파일들을 개별 커밋 및 푸시
-            git_pull_submodule(today_schedules_root_dir)
+            git_pull_changes_submodule(today_schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"])
             for file_path in created_files:
-                git_auto_commit_submodule(file_path, selected_team)
+                git_auto_commit_submodule(file_path, selected_team, today_schedules_root_dir, st.secrets["GITHUB"]["REPO_URL_TODAY_SCHEDULES"])
 
         # 함수 실행 예시
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
@@ -665,7 +659,7 @@ def delete_memo_and_refresh(timestamp):
     if not st.session_state.get("admin_authenticated", False):
         return
 
-    git_pull_submodule(memo_root_dir)
+    git_pull_changes_submodule(memo_root_dir, st.secrets["GITHUB"]["REPO_URL_MEMO"])
 
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "r", encoding="utf-8") as f:
@@ -677,7 +671,7 @@ def delete_memo_and_refresh(timestamp):
         else:
             os.remove(memo_file_path)
     
-    git_auto_commit_submodule(memo_file_path, selected_team)
+    git_auto_commit_submodule(memo_file_path, selected_team, memo_root_dir, st.secrets["GITHUB"])
     st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
     time.sleep(1)
     st.rerun()
