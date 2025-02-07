@@ -141,7 +141,7 @@ def git_pull_changes():
 # -------------------------------------------------------------------
 if 'git_initialized' not in st.session_state:
     git_init_repo()
-    git_pull_changes()
+    #git_pull_changes()
     st.session_state.git_initialized = True
 
 # -------------------------------------------------------------------
