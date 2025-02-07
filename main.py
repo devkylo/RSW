@@ -289,6 +289,10 @@ if password:
     if password == correct_password:
         st.session_state.admin_authenticated = True
         st.sidebar.success(f"{selected_team} 관리자 모드 활성화 ✨")
+        # 사이드바에 동기화 버튼 추가 (원하는 위치에 배치)
+        if st.sidebar.button("🔄 GitHub 동기화 🔄"):
+            git_pull_changes()
+            st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
 
         # 근무표 파일 업로드
         uploaded_schedule_file = st.sidebar.file_uploader(
@@ -394,11 +398,6 @@ if password:
                     st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
     else:
         st.sidebar.error("❌ 비밀번호 오류 ❌")
-        
-        # 사이드바에 동기화 버튼 추가 (원하는 위치에 배치)
-    if st.sidebar.button("🔄 GitHub 동기화 🔄"):
-        git_pull_changes()
-        st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
 
 st.sidebar.markdown("🙋 :blue[문의 : 관제SO팀]")
 
