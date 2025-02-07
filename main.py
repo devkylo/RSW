@@ -12,11 +12,11 @@ from urllib.parse import unquote
 from cryptography.fernet import Fernet
 from git import Repo, GitCommandError
 import subprocess
-import threading
+#import threading
 
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
-git_lock = threading.Lock()
+#git_lock = threading.Lock()
 
 # -------------------------------------------------------------------
 # Git 사용자 정보 강제 재설정 함수
@@ -152,13 +152,13 @@ def git_push_changes():
 # -------------------------------------------------------------------
 # Git 동시 작업 제어
 # -------------------------------------------------------------------
-def safe_git_push_changes():
-    with git_lock:
-        git_push_changes()  # 원래의 push 함수를 호출
+#def safe_git_push_changes():
+    #with git_lock:
+        #git_push_changes()  # 원래의 push 함수를 호출
 
-def safe_git_pull_changes():
-    with git_lock:
-        git_pull_changes()  # 원래의 pull 함수를 호출
+#def safe_git_pull_changes():
+    #with git_lock:
+        #git_pull_changes()  # 원래의 pull 함수를 호출
 # -------------------------------------------------------------------
 # Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
 # -------------------------------------------------------------------
@@ -273,7 +273,7 @@ def save_and_reset():
                 st.session_state.new_memo_text = ""
                 st.toast("메모가 저장되었습니다!", icon="✅")
             except Exception as e:
-                st.error(f"Git 저장 중 오류 발생: {e}")
+                st.error(f"메모 저장 중 오류 발생: {e}")
     else:
         st.toast("빈 메모는 저장할 수 없습니다!", icon="⚠️")
 
