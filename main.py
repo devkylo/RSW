@@ -126,7 +126,7 @@ def git_auto_commit(file_path, team_name):
 
 
 # -------------------------------------------------------------------
-# 3) 원격 저장소의 최신 변경사항 동기화 (pull)
+# 3) 원격 저장소의 최신 변경사항 동기화 (pull, push)
 # -------------------------------------------------------------------
 def git_pull_changes():
     try:
@@ -134,9 +134,18 @@ def git_pull_changes():
         origin = repo.remote(name='origin')
         origin.set_url(build_auth_repo_url())  # 최신 인증 URL 반영
         origin.pull("main")
-        #st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
     except GitCommandError as e:
         st.error(f"Git 동기화 오류: {e}")
+
+def git_push_changes():
+    try:
+        repo = Repo(repo_root)
+        origin = repo.remote(name="origin")
+        origin.set_url(build_auth_repo_url()) # 최신 인증 URL 반영
+        # 로컬에 커밋된 변경사항을 원격 저장소로 push
+        origin.push("HEAD:refs/heads/main")
+    except GitCommandError as e:
+        st.error(f"Git push 오류: {e}")
 
 # -------------------------------------------------------------------
 # Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
@@ -293,7 +302,8 @@ if password:
         # 사이드바에 동기화 버튼 추가 (원하는 위치에 배치)
         if st.sidebar.button("🔄 GitHub 동기화 🔄"):
             st.session_state.auto_sync_enabled = True
-            # 원격 저장소 동기화(push, pull 등 필요한 동작을 실행
+            # 원격 저장소 동기화(push, pull 등 필요한 동작을 실행)
+            git_push_changes()
             git_pull_changes()
             st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
 
