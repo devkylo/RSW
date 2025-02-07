@@ -316,8 +316,8 @@ if password:
             # 원격 저장소 동기화(push, pull 등 필요한 동작을 실행)
             git_push_changes()
             git_pull_changes()
+            st.success("GitHub에서 최신 데이터 동기화 완료! 🔄")
             st.session_state.auto_sync_enabled = False
-            st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
 
         # 근무표 파일 업로드
         uploaded_schedule_file = st.sidebar.file_uploader(
