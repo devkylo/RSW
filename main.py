@@ -96,36 +96,28 @@ def git_init_repo():
         repo.index.add([gitignore_path])
         repo.index.commit("Initial commit with .gitignore")
         repo.git.branch("-M", "main")
-       
-        #st.toast("Git 저장소가 초기화되었습니다.", icon="✅")
 
 # -------------------------------------------------------------------
 # 2) 변경사항 자동 커밋 및 푸시 함수 (push 전 원격 URL 재설정 포함)
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
-    """
-    파일 저장 후 자동 커밋 및 원격 푸시 (파일이 존재하면 add, 없으면 remove하여 삭제를 반영)
-    """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        repo = Repo(repo_root)  # repo_root 기준으로 작업
-        # file_path를 repo_root 기준 상대경로로 변환
-        relative_path = os.path.relpath(file_path, repo_root)
-        # 파일이 존재하면 추가, 존재하지 않으면 삭제 상태를 인덱스에 반영
-        if os.path.exists(file_path):
-            repo.index.add([relative_path])
-        else:
-            repo.index.remove([relative_path])
-        repo.index.commit(commit_message)
-        repo.git.branch("-M", "main")
-        origin = repo.remote(name='origin')
-        # 최신 PAT가 포함된 URL로 재설정 후 push
-        origin.set_url(build_auth_repo_url())
-        if st.session_state.get("auto_sync_enabled", False):
-            origin.push("HEAD:refs/heads/main")
+        with git_lock:  # Git 작업에 Lock 적용
+            repo = Repo(repo_root)
+            relative_path = os.path.relpath(file_path, repo_root)
+            if os.path.exists(file_path):
+                repo.index.add([relative_path])
+            else:
+                repo.index.remove([relative_path])
+            repo.index.commit(commit_message)
+            repo.git.branch("-M", "main")
+            origin = repo.remote(name='origin')
+            origin.set_url(build_auth_repo_url())
+            if st.session_state.get("auto_sync_enabled", False):
+                origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
-
 
 # -------------------------------------------------------------------
 # 3) 원격 저장소의 최신 변경사항 동기화 (pull, push)
