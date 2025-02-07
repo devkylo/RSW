@@ -83,7 +83,7 @@ def _inject_token(remote_url):
 
 def git_pull_changes_submodule(submodule_path, remote_url):
     """
-    지정한 서브모듈 폴더에서 untracked 파일을 깨끗이 제거한 후 원격 저장소(main 브랜치)를 pull 합니다.
+    지정한 서브모듈 폴더에서 untracked 파일을 삭제한 후, --allow-unrelated-histories 옵션을 적용하여 원격 저장소(main 브랜치)를 pull 합니다.
     """
     try:
         repo = Repo(submodule_path)
@@ -92,7 +92,8 @@ def git_pull_changes_submodule(submodule_path, remote_url):
         origin.set_url(_inject_token(remote_url))
         # untracked 파일/디렉토리 삭제 (주의: 로컬의 미관리 파일은 모두 삭제됩니다)
         repo.git.clean('-d', '-f')
-        origin.pull("main")
+        # --allow-unrelated-histories 옵션을 추가하여 pull
+        repo.git.pull("--allow-unrelated-histories", "origin", "main")
     except GitCommandError as e:
         st.error(f"{submodule_path} Git 동기화 오류: {e}")
 
