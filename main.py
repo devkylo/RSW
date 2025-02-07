@@ -70,22 +70,35 @@ def git_init_submodule(submodule_path, remote_url):
         repo.index.commit("Initial commit in submodule")
         repo.git.branch("-M", "main")
 
+def _inject_token(remote_url):
+    """
+    HTTPS URL에 토큰과 사용자 이름을 삽입하여 인증 문제를 회피합니다.
+    예시) "https://github.com/..." -> "https://{USER_NAME}:{TOKEN}@github.com/..."
+    """
+    if remote_url.startswith("https://") and "TOKEN" in st.secrets["GITHUB"]:
+        token = st.secrets["GITHUB"]["TOKEN"]
+        user = st.secrets["GITHUB"]["USER_NAME"]
+        return remote_url.replace("https://", f"https://{user}:{token}@")
+    return remote_url
+
 def git_pull_changes_submodule(submodule_path, remote_url):
     """
-    지정한 서브 모듈 폴더에서 원격 저장소(main 브랜치)를 pull 합니다.
+    지정한 서브모듈 폴더에서 untracked 파일을 깨끗이 제거한 후 원격 저장소(main 브랜치)를 pull 합니다.
     """
     try:
         repo = Repo(submodule_path)
         origin = repo.remote(name='origin')
-        origin.set_url(remote_url)
+        # 인증정보가 포함된 URL로 변경
+        origin.set_url(_inject_token(remote_url))
+        # untracked 파일/디렉토리 삭제 (주의: 로컬의 미관리 파일은 모두 삭제됩니다)
+        repo.git.clean('-d', '-f')
         origin.pull("main")
-        # st.toast(f"{submodule_path} 동기화 완료!", icon="🔄")
     except GitCommandError as e:
         st.error(f"{submodule_path} Git 동기화 오류: {e}")
 
 def git_auto_commit_submodule(file_path, team_name, submodule_path, remote_url):
     """
-    지정한 서브 모듈 내 파일에 대해 자동 add, commit, 그리고 push를 수행합니다.
+    서브 모듈 내 파일 변경 사항에 대해 자동 add, commit, push를 수행합니다.
     """
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
@@ -101,10 +114,12 @@ def git_auto_commit_submodule(file_path, team_name, submodule_path, remote_url):
         repo.index.commit(commit_message)
         repo.git.branch("-M", "main")
         origin = repo.remote(name='origin')
-        origin.set_url(remote_url)
+        # 토큰이 적용된 원격 URL로 변경하여 push (비대화형 환경에서 인증 문제 회피)
+        origin.set_url(_inject_token(remote_url))
         origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
         st.error(f"{submodule_path} Git 작업 오류: {e}")
+
 
 def init_all_submodules():
     """
