@@ -669,7 +669,7 @@ try:
 except FileNotFoundError:
     st.info(f"❌ {selected_month} 근무표가 등록되지 않았습니다.")
 
-st.header(f"{selected_team} - {selected_month} 메모 📓")
+st.header(f"{selected_team} - {selected_month} 메모 📗")
 
 def load_memos(memo_file_path):
     if os.path.exists(memo_file_path):
