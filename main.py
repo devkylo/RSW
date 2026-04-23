@@ -168,22 +168,6 @@ def load_csv_data(file_path):
 # -------------------------------------------------------------------
 st.title("Rotation Scheduler WebService 💻")
 
-hide_streamlit_style = """
-<style>
-/* 1. 기본 푸터 완벽 숨김 */
-footer {visibility: hidden !important;}
-
-/* 2. 클래스 이름이 바뀌어도 'viewerBadge'로 시작하면 무조건 숨김 */
-div[class^="viewerBadge_container"] { display: none !important; }
-div[class^="styles_viewerBadge"] { display: none !important; }
-div[class^="viewerBadge_text"] { display: none !important; }
-div[class^="viewerBadge_link"] { display: none !important; }
-
-/* 3. Streamlit Cloud 링크 URL 자체를 추적해서 강제로 없애버림 (가장 확실함) */
-a[href*="streamlit.io/cloud"] { display: none !important; }
-</style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # 팀 및 월 선택
 st.sidebar.title("팀 선택 ✅")
 teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안SO팀", "성수SO팀", "중부SO팀"]
