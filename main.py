@@ -629,7 +629,7 @@ try:
         use_container_width=True, 
         height=640,               
         hide_index=True,
-        on_select="ignore",
+        on_select="rerun",
         selection_mode="single-row"
     )
 
