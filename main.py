@@ -718,8 +718,8 @@ if memos_list:
 
         st.markdown(f"📢 **{memo['author']}**님 ({formatted_timestamp})")
         st.write("🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻🔻")
-        memo_content = memo["note"].replace("\n", "  \n")
-        st.markdown(memo_content)
+        memo_content = memo["note"].replace("\n", "<br>")
+        st.markdown(f"<div style='font-size: 16px; font-weight: 400; line-height: 1.6;'>{memo_content}</div>", unsafe_allow_html=True)
         st.write("🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺")
         
         if st.session_state.get("admin_authenticated", False):
