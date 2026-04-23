@@ -667,8 +667,10 @@ try:
     st.dataframe(
         filtered_df,
         use_container_width=True, 
-        height=640,               
-        hide_index=True           
+        height=555,               
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row"
     )
 
     st.subheader("🔍 구성원 근무표 검색")
