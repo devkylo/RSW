@@ -168,6 +168,20 @@ def load_csv_data(file_path):
 # -------------------------------------------------------------------
 st.title("Rotation Scheduler WebService 💻")
 
+hide_streamlit_style = """
+<style>
+/* 기본 푸터(Made with Streamlit) 숨기기 */
+footer {visibility: hidden;}
+
+/* 오른쪽 아래 'Hosted with Streamlit' 및 프로필 뱃지 숨기기 */
+.viewerBadge_container__1QSob,
+.viewerBadge_link__1S137,
+.viewerBadge_text__1JaDK {
+    display: none !important;
+}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # 팀 및 월 선택
 st.sidebar.title("팀 선택 ✅")
 teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안SO팀", "성수SO팀", "중부SO팀"]
