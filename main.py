@@ -170,15 +170,17 @@ st.title("Rotation Scheduler WebService 💻")
 
 hide_streamlit_style = """
 <style>
-/* 기본 푸터(Made with Streamlit) 숨기기 */
-footer {visibility: hidden;}
+/* 1. 기본 푸터 완벽 숨김 */
+footer {visibility: hidden !important;}
 
-/* 오른쪽 아래 'Hosted with Streamlit' 및 프로필 뱃지 숨기기 */
-.viewerBadge_container__1QSob,
-.viewerBadge_link__1S137,
-.viewerBadge_text__1JaDK {
-    display: none !important;
-}
+/* 2. 클래스 이름이 바뀌어도 'viewerBadge'로 시작하면 무조건 숨김 */
+div[class^="viewerBadge_container"] { display: none !important; }
+div[class^="styles_viewerBadge"] { display: none !important; }
+div[class^="viewerBadge_text"] { display: none !important; }
+div[class^="viewerBadge_link"] { display: none !important; }
+
+/* 3. Streamlit Cloud 링크 URL 자체를 추적해서 강제로 없애버림 (가장 확실함) */
+a[href*="streamlit.io/cloud"] { display: none !important; }
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
