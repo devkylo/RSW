@@ -667,7 +667,7 @@ try:
     st.dataframe(
         filtered_df,
         use_container_width=True, 
-        height=555,               
+        height=640,               
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row"
