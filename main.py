@@ -168,6 +168,28 @@ def load_csv_data(file_path):
 # -------------------------------------------------------------------
 st.title("Rotation Scheduler WebService 💻")
 
+# ✨ 상단 깃허브 아이콘 및 하단 푸터 숨기기 ✨
+hide_streamlit_style = """
+<style>
+/* 1. 우측 상단 깃허브 아이콘, Fork, Stop 버튼 등이 있는 헤더 전체 숨김 */
+header {visibility: hidden !important;}
+[data-testid="stHeader"] {display: none !important;}
+[data-testid="stToolbar"] {display: none !important;}
+
+/* 2. 하단 푸터 숨김 */
+footer {visibility: hidden !important;}
+
+/* 3. 하단 뱃지 숨김 시도 (클라우드 환경에 따라 안 먹힐 수 있음) */
+.viewerBadge_container__1QSob,
+.viewerBadge_link__1S137,
+.viewerBadge_text__1JaDK,
+[class^="viewerBadge_"] {
+    display: none !important;
+}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 # 팀 및 월 선택
 st.sidebar.title("팀 선택 ✅")
 teams = ["관제SO팀", "동부SO팀", "보라매SO팀", "백본SO팀", "보안SO팀", "성수SO팀", "중부SO팀"]
