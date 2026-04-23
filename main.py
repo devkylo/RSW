@@ -98,26 +98,40 @@ def git_init_repo():
         repo.git.branch("-M", "main")
 
 # -------------------------------------------------------------------
-# 2) 변경사항 자동 커밋 및 푸시 함수 (push 전 원격 URL 재설정 포함)
+# 2) 변경사항 자동 커밋 및 푸시 함수 (수정본)
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        with git_lock:  # Git 작업에 Lock 적용
+        with git_lock:  # 스레드 동시 접근 방지
+            
+            # 🔥 추가된 안전장치: 엉켜있는 Git 자물쇠(lock) 파일 강제 제거 🔥
+            lock_path = os.path.join(repo_root, ".git", "index.lock")
+            if os.path.exists(lock_path):
+                os.remove(lock_path)
+                print("Stale index.lock removed.") # 로그 확인용
+            
             repo = Repo(repo_root)
             relative_path = os.path.relpath(file_path, repo_root)
+            
             if os.path.exists(file_path):
                 repo.index.add([relative_path])
             else:
                 repo.index.remove([relative_path])
+                
             repo.index.commit(commit_message)
             repo.git.branch("-M", "main")
             origin = repo.remote(name='origin')
             origin.set_url(build_auth_repo_url())
+            
             if st.session_state.get("auto_sync_enabled", False):
                 origin.push("HEAD:refs/heads/main")
+                
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
+    except Exception as e:
+        # 혹시 lock 파일 삭제 중 권한 에러 등이 발생할 경우를 대비
+        st.error(f"시스템 오류 발생: {e}")
 
 # -------------------------------------------------------------------
 # 3) 원격 저장소의 최신 변경사항 동기화 (pull, push)
