@@ -667,7 +667,7 @@ try:
         filtered_df,
         gridOptions=grid_options,
         height=555,
-        theme="streamlit"
+        theme="alpine"
     )
 
     st.subheader("🔍 구성원 근무표 검색")
