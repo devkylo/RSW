@@ -509,7 +509,7 @@ try:
                     st.write("야간 근무자가 없습니다.")
 
                 st.write("휴가 근무자 🌴")
-                vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차","숙/연차"]
+                vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "휴가(야), "휴가(숙)", "건검(주)"]
                 vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
                 if not vacation_shift.empty:
                     vacation_display = vacation_shift[["파트 구분", "이름", today_column]].rename(
@@ -559,7 +559,7 @@ try:
                         columns={"파트 구분": "파트", today_column: "근무"}
                     ).to_dict(orient="records")
 
-                    vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "야/연차", "숙/연차"]
+                    vacation_keywords = ["휴가(주)", "대휴(주)", "대휴", "경조", "연차", "휴가(야), "휴가(숙)", "건검(주)"]
                     vacation_shift = df_schedule[df_schedule[today_column].isin(vacation_keywords)].copy()
                     vacation_shift_data = vacation_shift[["파트 구분", "이름", today_column]].rename(
                         columns={"파트 구분": "파트", today_column: "근무"}
