@@ -667,7 +667,7 @@ try:
     st.dataframe(
         filtered_df,
         use_container_width=True, # 화면 가로 길이에 꽉 차게 맞춤
-        height=555,               # 표의 세로 길이
+        height=585,               # 표의 세로 길이
         hide_index=True           # 불필요한 인덱스(0, 1, 2...) 숨김
     )
 
