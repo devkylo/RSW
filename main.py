@@ -87,16 +87,24 @@ def git_init_repo():
         repo.git.branch("-M", "main")
 
 # -------------------------------------------------------------------
-# 2) 변경사항 자동 커밋 및 푸시 함수 (Lock 강제 해제 포함)
+# 🔥 추가: 엉켜있는 Git 자물쇠(lock) 파일 강제 제거 함수
+# -------------------------------------------------------------------
+def remove_stale_git_lock():
+    lock_path = os.path.join(repo_root, ".git", "index.lock")
+    if os.path.exists(lock_path):
+        try:
+            os.remove(lock_path)
+        except Exception:
+            pass
+
+# -------------------------------------------------------------------
+# 2) 변경사항 자동 커밋 및 푸시 함수
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
         with git_lock:
-            # 🔥 엉켜있는 Git 자물쇠(lock) 파일 강제 제거
-            lock_path = os.path.join(repo_root, ".git", "index.lock")
-            if os.path.exists(lock_path):
-                os.remove(lock_path)
+            remove_stale_git_lock() # 👈 락 강제 해제
             
             repo = Repo(repo_root)
             relative_path = os.path.relpath(file_path, repo_root)
@@ -124,29 +132,25 @@ def git_auto_commit(file_path, team_name):
 # -------------------------------------------------------------------
 def git_pull_changes():
     try:
-        repo = Repo(repo_root)
-        origin = repo.remote(name='origin')
-        origin.set_url(build_auth_repo_url())
-        origin.pull("main")
+        with git_lock: # 👈 동시 접근 방지 및 락 해제 적용
+            remove_stale_git_lock()
+            repo = Repo(repo_root)
+            origin = repo.remote(name='origin')
+            origin.set_url(build_auth_repo_url())
+            origin.pull("main")
     except GitCommandError as e:
         st.error(f"Git 동기화 오류: {e}")
 
 def git_push_changes():
     try:
-        repo = Repo(repo_root)
-        origin = repo.remote(name="origin")
-        origin.set_url(build_auth_repo_url())
-        origin.push("HEAD:refs/heads/main")
+        with git_lock: # 👈 동시 접근 방지 및 락 해제 적용
+            remove_stale_git_lock()
+            repo = Repo(repo_root)
+            origin = repo.remote(name="origin")
+            origin.set_url(build_auth_repo_url())
+            origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
         st.error(f"Git push 오류: {e}")
-
-def safe_git_push_changes():
-    with git_lock:
-        git_push_changes()
-
-def safe_git_pull_changes():
-    with git_lock:
-        git_pull_changes()
 
 if 'git_initialized' not in st.session_state:
     git_init_repo()
@@ -435,10 +439,22 @@ try:
         else:
             default_date = datetime(current_year, selected_month_num, 1).date()
 
+        # -------------------------------------------------------------
+        # ✨ 수정: 날짜 형식 1(금) 과 01(금) 동시 지원 로직 적용 (UI 화면용)
+        # -------------------------------------------------------------
         st.subheader("날짜 선택 📅")
         selected_date = st.date_input("날짜를 선택하세요:", default_date)
-        today_column = f"{selected_date.day}({['월','화','수','목','금','토','일'][selected_date.weekday()]})"
+        
+        weekday_str = ['월','화','수','목','금','토','일'][selected_date.weekday()]
+        col_no_zero = f"{selected_date.day}({weekday_str})"       # 예: 1(금)
+        col_with_zero = f"{selected_date.day:02d}({weekday_str})" # 예: 01(금)
+        
         df_schedule.columns = df_schedule.columns.str.strip()
+        
+        if col_with_zero in df_schedule.columns:
+            today_column = col_with_zero
+        else:
+            today_column = col_no_zero
 
         if today_column in df_schedule.columns:
             df_schedule["근무 형태"] = df_schedule[today_column].map(work_mapping).fillna("")
@@ -518,7 +534,19 @@ try:
                 if not os.path.exists(month_folder):
                     os.mkdir(month_folder)
                 json_file_path = os.path.join(month_folder, f"{date.strftime('%Y-%m-%d')}_schedule.json")
-                today_column = f"{date.day}({['월','화','수','목','금','토','일'][date.weekday()]})"
+                
+                # -------------------------------------------------------------
+                # ✨ 수정: 날짜 형식 1(금) 과 01(금) 동시 지원 로직 적용 (JSON 백그라운드용)
+                # -------------------------------------------------------------
+                weekday_str = ['월','화','수','목','금','토','일'][date.weekday()]
+                col_no_zero = f"{date.day}({weekday_str})"
+                col_with_zero = f"{date.day:02d}({weekday_str})"
+                
+                if col_with_zero in df_schedule.columns:
+                    today_column = col_with_zero
+                else:
+                    today_column = col_no_zero
+
                 if today_column in df_schedule.columns:
                     df_schedule["근무 형태"] = df_schedule[today_column].map(work_mapping).fillna("")
                     day_shift = df_schedule[df_schedule["근무 형태"].str.contains("주", na=False)].copy()
