@@ -6,14 +6,12 @@ from datetime import timedelta, datetime
 import time
 import pytz
 import json
-from st_aggrid import AgGrid, GridOptionsBuilder
 from collections import defaultdict
 from urllib.parse import unquote
 from cryptography.fernet import Fernet
 from git import Repo, GitCommandError
 import subprocess
 import threading
-
 
 os.environ["GIT_OPTIONAL_LOCKS"] = "0" #index.lock 파일 관련 오류 해지
 git_lock = threading.Lock()
@@ -56,11 +54,6 @@ for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_
 # Personal Access Token(PAT)가 포함된 인증 URL 생성 함수
 # -------------------------------------------------------------------
 def build_auth_repo_url():
-    """
-    st.secrets에 등록된 REPO_URL과 TOKEN을 이용하여,
-    토큰이 포함된 인증 URL을 생성합니다.
-    예: "https://github.com/devkylo/RSW.git" → "https://<TOKEN>:x-oauth-basic@github.com/devkylo/RSW.git"
-    """
     repo_url = st.secrets["GITHUB"]["REPO_URL"]
     token = st.secrets["GITHUB"]["TOKEN"]
     if token:
@@ -73,43 +66,37 @@ def build_auth_repo_url():
 # 1) Git 저장소 초기화 및 원격 연결 (GitPython, PAT 적용)
 # -------------------------------------------------------------------
 def git_init_repo():
-    """Git 저장소 초기화 및 원격 연결 (PAT 적용)"""
-    # 필수 폴더들 생성 (team_schedules, model_example 등)
     for folder in [schedules_root_dir, model_example_root_dir, today_schedules_root_dir, memo_root_dir]:
         create_dir_safe(folder)
-   
-    # repo_root 경로에 .git 폴더가 없으면 저장소 초기화
+    
     if not os.path.exists(os.path.join(repo_root, ".git")):
         repo = Repo.init(repo_root, initial_branch="main")
         auth_repo_url = build_auth_repo_url()
         repo.create_remote('origin', auth_repo_url)
-       
+        
         with repo.config_writer() as config:
             config.set_value("user", "name", st.secrets["GITHUB"]["USER_NAME"])
             config.set_value("user", "email", st.secrets["GITHUB"]["USER_EMAIL"])
-       
-        # .gitignore 생성 - Git에 포함하지 않을 폴더만 지정 (team_schedules는 커밋)
+        
         gitignore_path = os.path.join(repo_root, ".gitignore")
         with open(gitignore_path, "w") as f:
             f.write("team_today_schedules/\nteam_memo/\n*.tmp\n")
-       
+        
         repo.index.add([gitignore_path])
         repo.index.commit("Initial commit with .gitignore")
         repo.git.branch("-M", "main")
 
 # -------------------------------------------------------------------
-# 2) 변경사항 자동 커밋 및 푸시 함수 (수정본)
+# 2) 변경사항 자동 커밋 및 푸시 함수 (Lock 강제 해제 포함)
 # -------------------------------------------------------------------
 def git_auto_commit(file_path, team_name):
     commit_message = f"Auto-commit: {team_name} {datetime.now(korea_tz).strftime('%Y-%m-%d %H:%M')}"
     try:
-        with git_lock:  # 스레드 동시 접근 방지
-            
-            # 🔥 추가된 안전장치: 엉켜있는 Git 자물쇠(lock) 파일 강제 제거 🔥
+        with git_lock:
+            # 🔥 엉켜있는 Git 자물쇠(lock) 파일 강제 제거
             lock_path = os.path.join(repo_root, ".git", "index.lock")
             if os.path.exists(lock_path):
                 os.remove(lock_path)
-                print("Stale index.lock removed.") # 로그 확인용
             
             repo = Repo(repo_root)
             relative_path = os.path.relpath(file_path, repo_root)
@@ -130,7 +117,6 @@ def git_auto_commit(file_path, team_name):
     except GitCommandError as e:
         st.error(f"Git 작업 오류: {e}")
     except Exception as e:
-        # 혹시 lock 파일 삭제 중 권한 에러 등이 발생할 경우를 대비
         st.error(f"시스템 오류 발생: {e}")
 
 # -------------------------------------------------------------------
@@ -140,7 +126,7 @@ def git_pull_changes():
     try:
         repo = Repo(repo_root)
         origin = repo.remote(name='origin')
-        origin.set_url(build_auth_repo_url())  # 최신 인증 URL 반영
+        origin.set_url(build_auth_repo_url())
         origin.pull("main")
     except GitCommandError as e:
         st.error(f"Git 동기화 오류: {e}")
@@ -149,28 +135,29 @@ def git_push_changes():
     try:
         repo = Repo(repo_root)
         origin = repo.remote(name="origin")
-        origin.set_url(build_auth_repo_url()) # 최신 인증 URL 반영
-        # 로컬에 커밋된 변경사항을 원격 저장소로 push
+        origin.set_url(build_auth_repo_url())
         origin.push("HEAD:refs/heads/main")
     except GitCommandError as e:
         st.error(f"Git push 오류: {e}")
 
-# -------------------------------------------------------------------
-# Git 동시 작업 제어
-# -------------------------------------------------------------------
 def safe_git_push_changes():
     with git_lock:
-        git_push_changes()  # 원래의 push 함수를 호출
+        git_push_changes()
 
 def safe_git_pull_changes():
     with git_lock:
-        git_pull_changes()  # 원래의 pull 함수를 호출
-# -------------------------------------------------------------------
-# Git 초기화 및 동기화 (한번만 실행: 세션 상태 사용)
-# -------------------------------------------------------------------
+        git_pull_changes()
+
 if 'git_initialized' not in st.session_state:
     git_init_repo()
     st.session_state.git_initialized = True
+
+# -------------------------------------------------------------------
+# ✨ 데이터 로딩 캐싱 함수 추가 (속도 최적화의 핵심)
+# -------------------------------------------------------------------
+@st.cache_data
+def load_csv_data(file_path):
+    return pd.read_csv(file_path)
 
 # -------------------------------------------------------------------
 # Streamlit UI - 팀, 월, 메모, 파일 업로드 등
@@ -201,12 +188,10 @@ memo_team_folder_path = os.path.join(memo_root_dir, selected_team)
 for folder in [schedules_folder_path, model_example_folder_path, today_team_folder_path, memo_team_folder_path]:
     create_dir_safe(folder)
 
-# 날짜 관련 변수 (근무표 생성을 위해)
 start_date = datetime(current_year, selected_month_num, 1)
 end_date = (start_date + timedelta(days=31)).replace(day=1) - timedelta(days=1)
 date_list = [(start_date + timedelta(days=i)) for i in range((end_date - start_date).days + 1)]
 
-# 파일 경로 설정
 schedules_file_path = os.path.join(schedules_folder_path, f"{current_year}_{selected_month}_{selected_team}_schedule.csv")
 model_example_file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
 memo_file_path = os.path.join(memo_team_folder_path, f"{current_year}_{selected_month}_memos.json")
@@ -226,17 +211,15 @@ def get_korea_time():
 
 def save_memo_with_reset(memo_file_path, memo_text, author=""):
     try:
-        # 메모 폴더 생성
         memo_dir = os.path.dirname(memo_file_path)
         create_dir_safe(memo_dir)
-       
+        
         memo_data = {
             "note": memo_text,
             "author": author,
             "timestamp": get_korea_time()
         }
-       
-        # 파일이 있으면 내용 확인 후 JSON 로드, 없거나 비어있다면 빈 리스트로 시작
+        
         if os.path.exists(memo_file_path):
             with open(memo_file_path, "r", encoding="utf-8") as f:
                 content = f.read().strip()
@@ -246,34 +229,27 @@ def save_memo_with_reset(memo_file_path, memo_text, author=""):
                     memos_list = json.loads(content)
         else:
             memos_list = []
-           
-        # 중복 체크
+            
         for existing_memo in memos_list:
             if (existing_memo["note"] == memo_data["note"] and
                 existing_memo["author"] == memo_data["author"] and
                 existing_memo["timestamp"] == memo_data["timestamp"]):
                 st.info("메모가 중복되었습니다. 저장이 취소됩니다.")
                 return False
-               
-        # 메모 추가 및 저장
+                
         memos_list.append(memo_data)
         with open(memo_file_path, "w", encoding="utf-8") as f:
             json.dump(memos_list, f, ensure_ascii=False, indent=4)
-           
+            
         return True
-           
+            
     except Exception as e:
         st.error(f"메모 저장 중 오류 발생: {e}")
         return False
 
 def save_and_reset():
     if st.session_state.new_memo_text.strip():
-       
-        # 메모 저장 시도
-        if save_memo_with_reset(memo_file_path,
-                              st.session_state.new_memo_text.strip(),
-                              author=st.session_state.author_name):
-                             
+        if save_memo_with_reset(memo_file_path, st.session_state.new_memo_text.strip(), author=st.session_state.author_name):
             try:
                 git_auto_commit(memo_file_path, selected_team)
                 st.session_state.new_memo_text = ""
@@ -283,12 +259,8 @@ def save_and_reset():
     else:
         st.toast("빈 메모는 저장할 수 없습니다!", icon="⚠️")
 
-st.sidebar.text_input("작성자 이름",
-                      placeholder="작성자 이름을 입력하세요...",
-                      key="author_name")
-st.sidebar.text_area("메모 내용",
-                     placeholder="여기에 메모를 입력하세요...",
-                     key="new_memo_text")
+st.sidebar.text_input("작성자 이름", placeholder="작성자 이름을 입력하세요...", key="author_name")
+st.sidebar.text_area("메모 내용", placeholder="여기에 메모를 입력하세요...", key="new_memo_text")
 st.sidebar.button("메모 저장", on_click=save_and_reset)
 
 # -------------------------------------------------------------------
@@ -300,7 +272,6 @@ if "admin_authenticated" not in st.session_state:
 st.sidebar.title("관리자 로그인 🔒")
 password = st.sidebar.text_input("비밀번호 입력 🔑", type="password")
 
-# 업로드 처리 상태 변수 초기화
 if "schedules_upload_confirmed" not in st.session_state:
     st.session_state.schedules_upload_confirmed = False
 if "schedules_upload_canceled" not in st.session_state:
@@ -311,17 +282,16 @@ if "model_example_upload_canceled" not in st.session_state:
     st.session_state.model_example_upload_canceled = False
 
 if password:
-    # st.secrets의 teams 섹션에 등록된 비밀번호 사용
     correct_password = st.secrets["teams"].get(selected_team)
     if password == correct_password:
         st.session_state.admin_authenticated = True
         st.sidebar.success(f"{selected_team} 관리자 모드 활성화 ✨")
-        # 사이드바에 동기화 버튼 추가 (원하는 위치에 배치)
+        
         if st.sidebar.button("🔄 GitHub 동기화 🔄"):
             st.session_state.auto_sync_enabled = True
-            # 원격 저장소 동기화(push, pull 등 필요한 동작을 실행)
             git_push_changes()
             git_pull_changes()
+            st.cache_data.clear() # 동기화 후 캐시 초기화
             st.toast("GitHub에서 최신 데이터 동기화 완료!", icon="🔄")
             st.session_state.auto_sync_enabled = False
 
@@ -358,9 +328,9 @@ if password:
                                 uploaded_schedule_file.seek(0)
                                 df = pd.read_csv(uploaded_schedule_file, encoding='cp949')
 
-                    # 파일 저장 및 Git 커밋/푸시
                     df.to_csv(schedules_file_path, index=False, encoding='utf-8-sig')
                     git_auto_commit(schedules_file_path, selected_team)
+                    st.cache_data.clear() # 🚀 파일 갱신 후 데이터 캐시 초기화
                     st.sidebar.success(f"{selected_month} 근무표 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
@@ -369,12 +339,10 @@ if password:
                     if os.path.exists(schedules_file_path):
                         os.remove(schedules_file_path)
                     git_auto_commit(schedules_file_path, selected_team)
+                    st.cache_data.clear() # 🚀 파일 삭제 후 데이터 캐시 초기화
                     st.sidebar.warning(f"{selected_team} 근무표 업로드 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-
-                else:
-                    st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
 
         # 범례 파일 업로드
         uploaded_model_example_file = st.sidebar.file_uploader(
@@ -408,32 +376,33 @@ if password:
                             except Exception:
                                 uploaded_model_example_file.seek(0)
                                 df = pd.read_csv(uploaded_model_example_file, encoding='cp949')
+                                
                     file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                     df.to_csv(file_path, index=False, encoding='utf-8-sig')
                     git_auto_commit(file_path, selected_team)
+                    st.cache_data.clear() # 🚀 파일 갱신 후 데이터 캐시 초기화
                     st.sidebar.success(f"{selected_team} 범례 업로드 완료 ⭕")
                 except Exception as e:
                     st.sidebar.error(f"파일 처리 중 오류 발생: {e}")
             elif st.session_state.model_example_upload_canceled:
                 file_path = os.path.join(model_example_folder_path, f"{selected_team}_model_example.csv")
                 try:
-                    # 파일이 있으면 삭제; 없으면 그냥 넘어감
                     if os.path.exists(file_path):
                         os.remove(file_path)
-                    # 파일이 없어도 git_auto_commit()을 호출하여 삭제 상태를 Git에 반영
                     git_auto_commit(file_path, selected_team)
+                    st.cache_data.clear() # 🚀 파일 삭제 후 데이터 캐시 초기화
                     st.sidebar.warning(f"{selected_team} 범례 취소 완료 ❌")
                 except Exception as delete_error:
                     st.sidebar.error(f"파일 삭제 중 오류 발생: {delete_error}")
-                else:
-                    st.sidebar.warning("삭제할 파일이 존재하지 않습니다.")
     else:
         st.sidebar.error("❌ 비밀번호 오류 ❌")
 
 st.sidebar.markdown("🙋 :blue[문의 : 관제SO팀]")
 
 try:
-    df = pd.read_csv(schedules_file_path)
+    # 🚀 캐싱된 함수를 사용하여 데이터를 로드합니다!
+    df = load_csv_data(schedules_file_path)
+    
     if selected_month_num == current_month:
         default_date = today_date
     else:
@@ -455,8 +424,9 @@ try:
         )
 
     try:
-        df_schedule = pd.read_csv(schedules_file_path)
-        df_model = pd.read_csv(model_example_file_path)
+        # 🚀 캐싱된 함수를 사용하여 데이터를 로드합니다!
+        df_schedule = load_csv_data(schedules_file_path)
+        df_model = load_csv_data(model_example_file_path)
         df_model = df_model.dropna(subset=["실제 근무", "팀 근무기호"])
         work_mapping = dict(zip(df_model["팀 근무기호"], df_model["실제 근무"]))
 
@@ -542,7 +512,7 @@ try:
             st.warning(f"선택한 날짜 ({today_column})에 해당하는 데이터가 없습니다.")
 
         def save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping):
-            created_files = []  # 생성된 JSON 파일 경로를 저장하는 리스트
+            created_files = []  
             for date in date_list:
                 month_folder = os.path.join(today_team_folder_path, date.strftime('%Y-%m'))
                 if not os.path.exists(month_folder):
@@ -583,13 +553,11 @@ try:
                 with open(json_file_path, "w", encoding="utf-8") as json_file:
                     json.dump(schedule_data, json_file, ensure_ascii=False, indent=4)
                 created_files.append(json_file_path)
-           
+            
             for file_path in created_files:
                 git_auto_commit(file_path, selected_team)
 
-        # 함수 실행 예시
         save_monthly_schedules_to_json(date_list, today_team_folder_path, df_schedule, work_mapping)
-
 
         def validate_date_format(date_str):
             try:
@@ -618,11 +586,9 @@ try:
                 st.write({"status": "error", "message": "team 과 date 파라미터가 필요합니다."})
                 return
 
-            # URL 인코딩된 값 복원
             selected_team = unquote(team_values)
             selected_date = unquote(date_values)
-           
-            # 날짜 형식 검사
+            
             try:
                 datetime.strptime(selected_date, "%Y-%m-%d")
             except ValueError:
@@ -655,13 +621,7 @@ try:
     exclude_columns = ['본부 구분', '팀 구분', '년/월', '근무 구분']
     filtered_df = df.drop(columns=[col for col in exclude_columns if col in df.columns], errors='ignore')
 
-    gb = GridOptionsBuilder.from_dataframe(filtered_df)
-    gb.configure_column("파트 구분", pinned="left")
-    gb.configure_column("이름", pinned="left")
-    gb.configure_default_column(width=10)
-    gb.configure_grid_options(domLayout='normal', alwaysShowHorizontalScroll=True, suppressColumnVirtualisation=True)
-    grid_options = gb.build()
-
+    # 🚀 AgGrid 찌꺼기 코드 삭제 완료 및 DataFrame 적용
     st.subheader("전체 근무표 📆")
     
     st.dataframe(
@@ -692,7 +652,7 @@ def load_memos(memo_file_path):
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
-            if not content:  # 파일이 빈 경우
+            if not content:
                 return []
             try:
                 return json.loads(content)
@@ -701,19 +661,14 @@ def load_memos(memo_file_path):
                 return []
     return []
 
-
 def delete_memo_and_refresh(timestamp):
-    # 관리자 인증 체크: 관리자 로그인 상태가 아니라면 삭제 진행하지 않음.
     if not st.session_state.get("admin_authenticated", False):
-        #st.error("메모 삭제는 관리자 전용 기능입니다.")
         return
 
-    # 메모 파일이 존재하면 변경 내용을 반영합니다.
     if os.path.exists(memo_file_path):
         with open(memo_file_path, "r", encoding="utf-8") as f:
             memos_list = json.load(f)
 
-        # 삭제할 타임스탬프를 가진 메모를 제외한 목록 생성
         updated_memos = [memo for memo in memos_list if memo['timestamp'] != timestamp]
 
         if updated_memos:
@@ -721,14 +676,11 @@ def delete_memo_and_refresh(timestamp):
                 json.dump(updated_memos, f, ensure_ascii=False, indent=4)
         else:
             os.remove(memo_file_path)
-   
-    # Git 상태 반영 (존재 여부에 따라 add 또는 remove 수행)
+    
     git_auto_commit(memo_file_path, selected_team)
-
     st.toast("메모가 성공적으로 삭제되었습니다!", icon="💣")
     time.sleep(1)
     st.rerun()
-
 
 memos_list = load_memos(memo_file_path)
 if memos_list:
@@ -741,8 +693,7 @@ if memos_list:
         memo_content = memo["note"].replace("\n", "  \n")
         st.markdown(memo_content)
         st.write("🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺🔺")
-       
-        # 관리자 로그인 상태일 경우에만 삭제 버튼 활성화
+        
         if st.session_state.get("admin_authenticated", False):
             if st.button(
                 f"❌ 메모 삭제 ❌ (작성자: {memo['author']} / 작성 시간: {formatted_timestamp})",
@@ -751,7 +702,7 @@ if memos_list:
                 delete_memo_and_refresh(memo['timestamp'])
         else:
             st.info("🙋 삭제는 관리자에게 문의 부탁드립니다!🗑️")
-       
+        
         st.markdown("---")
 else:
     st.info(f"{selected_team}의 {selected_month}에 저장된 메모가 없습니다.")
